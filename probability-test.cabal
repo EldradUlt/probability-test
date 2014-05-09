@@ -20,7 +20,9 @@ Test-Suite probability-test-tests
   default-language:    Haskell2010
   Ghc-Options: -Wall -threaded -rtsopts
   main-is:    Tests.hs
-  build-depends: probability-test
+  build-depends:
+      probability-test
+    , base >= 4.6 && <4.7
 
 library
   exposed-modules:     Test.ProbabilityCheck, Test.Tasty.ProbabilityCheck
