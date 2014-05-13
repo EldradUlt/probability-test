@@ -4,6 +4,7 @@ module Test.ProbabilityCheck
        ( TestableDistribution
        , SampleableDistribution
        , testViaWilcoxMatchedPair
+       , testSameConfidenceApproximates
        ) where
 
 import Test.QuickCheck (Gen, generate, vectorOf, frequency)
@@ -48,23 +49,20 @@ smallestCentralBinomialCoefficientGreaterThan n = helper 1 n
   where helper a n = if ((2*a) `choose` a) > n then a else helper (a+1) n
 
 -- Note this assumes that all the approximates have the same confidence.
-testSameConfidenceApproximates :: (Ord a) => Double -> Gen ((Approximate a), a) -> TestTree
+testSameConfidenceApproximates :: (Ord a) => Double -> Gen ((Approximate a), a) -> Gen (Maybe TestResult)
 testSameConfidenceApproximates p genApprox =
-  testCase "MannWhitneyU test on Approximates"
-  (do
-      (conf, actuals) <- ((generate $ sequence $ take sampleSize $ repeat genApprox) >>= actualsToFirstConfAndActuals)
-      expectedBools <- generate $ vectorOf sampleSize $
-                        frequency [(fromIntegral $ numerator conf, return True)
-                                  , (fromIntegral $ (denominator conf) - (numerator conf), return False)]
-      (Just Significant) @=? (mannWhitneyUtest OneTailed p (boolsToSample expectedBools) (pairsToSample actuals))
-  )
-    where sampleSize = smallestCentralBinomialCoefficientGreaterThan (1/p)
-          getConfidence ((Approximate c _ _ _):_) = toRational c
-          boolsToSample = UV.fromList . (map (fromIntegral . fromEnum))
-          pairToBool ((Approximate _ lo _ hi), a) = a >= lo && a <= hi
-          pairsToSample = boolsToSample . map pairToBool
-          actualsToFirstConfAndActuals :: [(Approximate a, a)] -> IO (Rational, [(Approximate a, a)])
-          actualsToFirstConfAndActuals lst@(((Approximate c _ _ _),_):_) = return (toRational c, lst)
+  do
+    (conf, actuals) <- ((sequence $ take sampleSize $ repeat genApprox) >>= actualsToFirstConfAndActuals)
+    expectedBools <- vectorOf sampleSize $
+                     frequency [ (fromIntegral $ numerator conf, return True)
+                               , (fromIntegral $ (denominator conf) - (numerator conf), return False)]
+    return $ mannWhitneyUtest OneTailed p (boolsToSample expectedBools) (pairsToSample actuals)
+      where sampleSize = smallestCentralBinomialCoefficientGreaterThan (1/p)
+            getConfidence ((Approximate c _ _ _):_) = toRational c
+            boolsToSample = UV.fromList . (map (fromIntegral . fromEnum))
+            pairToBool ((Approximate _ lo _ hi), a) = a >= lo && a <= hi
+            pairsToSample = boolsToSample . map pairToBool
+            actualsToFirstConfAndActuals lst@(((Approximate c _ _ _),_):_) = return (toRational c, lst)
 
 
 
