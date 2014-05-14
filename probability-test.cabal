@@ -29,6 +29,7 @@ Test-Suite probability-test-tests
     , tasty >=0.8 && <0.9
     , approximate == 0.2.*
     , tasty-quickcheck == 0.8.*
+    , log-domain == 0.9.*
 
 library
   exposed-modules:     Test.ProbabilityCheck, Test.Tasty.ProbabilityCheck
