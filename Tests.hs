@@ -16,28 +16,25 @@ main =
   testGroup "probability-test's Tests"
   [
     testProperty "Correct Approximates claiming 100% accuracy never fail test." $ do
-       testConfidence <- choose (0,1) >>= (return . (1-))
-       testResult <- testSameConfidenceApproximates testConfidence $ do
+       testResult <- testSameConfidenceApproximates 0.05 $ do
          (high,mid,low) <- (arbitrary :: Gen (Integer, Integer, Integer))
                            >>= (\(a,b,c) -> return (max a $ max b c, min (max a b) $ min (max b c) (max a c), min a $ min b c))
          return (Approximate 1 low mid high, mid)
        case testResult of
          Just NotSignificant -> return succeeded
-         Just Significant -> return $ failed {reason = "Significant difference between Approximate's confidence and actual success rate."}
+         Just Significant -> return $ failed {reason = "\nSignificant difference between Approximate's confidence and actual success rate."}
          Nothing -> return $ failed {reason = "Sample size too small."}
   , testProperty "Incorrect Approximates claiming 100% accuracy always fail test." $ do
-       testConfidence <- choose (0,1) >>= (return . (1-))
-       testResult <- testSameConfidenceApproximates testConfidence $ do
+       testResult <- testSameConfidenceApproximates 0.05 $ do
          (high,mid,low) <- (arbitrary :: Gen (Integer, Integer, Integer))
                            >>= (\(a,b,c) -> return (max a $ max b c, min (max a b) $ min (max b c) (max a c), min a $ min b c))
          return (Approximate 1 low mid high, low-1)
        case testResult of
-         Just NotSignificant -> return $ failed {reason = "No significant difference between Approximate's confidence and actual success rate."}
+         Just NotSignificant -> return $ failed {reason = "\nNo significant difference between Approximate's confidence and actual success rate."}
          Just Significant -> return succeeded
          Nothing -> return $ failed {reason = "Sample size too small."}
-  , testCase "Low false Positive" $ ((Just NotSignificant) @=?) =<< (generate $ testSameConfidenceApproximates 0.999999 (genApproximate 0.5 0.5))
-    -- This test fails WAY more often than they should.
-  , testCase "Low false Negative" $ ((Just Significant) @=?) =<< (generate $ testSameConfidenceApproximates 0.999999999 (genApproximate 0.75 0.25))
+  , testCase "Low Type I error" $ ((Just NotSignificant) @=?) =<< (generate $ testSameConfidenceApproximates 0.05 (genApproximate 0.5 0.5))
+  , testCase "Low Type II error" $ ((Just Significant) @=?) =<< (generate $ testSameConfidenceApproximates 0.05 (genApproximate 0.95 0.05))
   ]
 
 genApproximate :: Log Double -> Double -> Gen (Approximate Integer, Integer)

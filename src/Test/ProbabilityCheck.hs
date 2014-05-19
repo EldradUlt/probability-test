@@ -57,12 +57,18 @@ testSameConfidenceApproximates p genApprox =
                      frequency [ (fromIntegral $ numerator conf, return True)
                                , (fromIntegral $ (denominator conf) - (numerator conf), return False)]
     return $ mannWhitneyUtest OneTailed p (boolsToSample expectedBools) (pairsToSample actuals)
-      where sampleSize = smallestCentralBinomialCoefficientGreaterThan (1/p)
+      where sampleSize = (10 *) $ smallestCentralBinomialCoefficientGreaterThan (1/p)
             getConfidence ((Approximate c _ _ _):_) = toRational c
             boolsToSample = UV.fromList . (map (fromIntegral . fromEnum))
-            pairToBool ((Approximate _ lo _ hi), a) = a >= lo && a <= hi
+            pairToBool ((Approximate _ lo _ hi), a) = lo <= a && a <= hi
             pairsToSample = boolsToSample . map pairToBool
             actualsToFirstConfAndActuals lst@(((Approximate c _ _ _),_):_) = return (toRational c, lst)
 
-
-
+-- A reasonable sample size to use for a desired Type I error rate,
+-- Type II error rate, minimum meaningful difference, and upper bound
+-- of square root of varriance. For a OneTailed test between two
+-- normal distributions where the test passes/fails based on whether
+-- the sample average is greater than standard normal distribution for
+-- the desired Type I error rate.
+minSampleSizeOneTailed :: Double -> Double -> Double -> Double -> Integer
+minSampleSizeOneTailed alpha beta minDiff sqrtVarriance = undefined
