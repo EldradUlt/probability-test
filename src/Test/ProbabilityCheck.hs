@@ -31,13 +31,13 @@ class SampleableDistribution s where
 -- N >= ((z - inverse_Phi(1 - beta)) / (mu* / sigma))^2
 
 --This is overly restirictive. Additionally it'll ungracefully throw
---an error if alpha is < 2^-1023. Also alpha should be restricted to
+--an error if p is < 2^-1023. Also p should be restricted to
 --0-1.
 testViaWilcoxMatchedPair :: Double -> Gen (Double, Double) -> Gen (Maybe TestResult)
 testViaWilcoxMatchedPair p genPair = do
   samples <- vectorOf sampleSize genPair
   return $ wilcoxonMatchedPairTest OneTailed p (UV.fromList $ map fst samples) (UV.fromList $ map snd samples)
-    where sampleSize = 10 * (ceiling $ logBase 2 (1/p))
+    where sampleSize = (ceiling $ logBase 2 (1/p))
 
 testApproximates :: Double -> Gen (Approximate Double, Double) -> Gen (Maybe TestResult)
 testApproximates p genApprox = 
