@@ -4,6 +4,7 @@ module Test.ProbabilityCheck
        ( TestableDistribution
        , SampleableDistribution
        , testViaWilcoxMatchedPair
+       , testApproximates
        , testSameConfidenceApproximates
        ) where
 
@@ -32,16 +33,17 @@ class SampleableDistribution s where
 --This is overly restirictive. Additionally it'll ungracefully throw
 --an error if alpha is < 2^-1023. Also alpha should be restricted to
 --0-1.
-testViaWilcoxMatchedPair :: Double -> Gen (Double, Double) -> TestTree
-testViaWilcoxMatchedPair alpha genPair =
-  testCase "WilcoxMatchedPair test"
-  (do
-      samples <- generate $ vectorOf sampleSize genPair
-      -- This test will be more clear. Nothing should never
-      -- happen. (Just Insignificant) means the tested pairs were not
-      -- within the desired probability.
-      (Just Significant) @=? (wilcoxonMatchedPairTest TwoTailed alpha (UV.fromList $ map fst samples) (UV.fromList $ map snd samples)))
-    where sampleSize = ceiling $ logBase 2 (1/alpha)
+testViaWilcoxMatchedPair :: Double -> Gen (Double, Double) -> Gen (Maybe TestResult)
+testViaWilcoxMatchedPair p genPair = do
+  samples <- vectorOf sampleSize genPair
+  return $ wilcoxonMatchedPairTest OneTailed p (UV.fromList $ map fst samples) (UV.fromList $ map snd samples)
+    where sampleSize = 10 * (ceiling $ logBase 2 (1/p))
+
+testApproximates :: Double -> Gen (Approximate Double, Double) -> Gen (Maybe TestResult)
+testApproximates p genApprox = 
+  testViaWilcoxMatchedPair p $ genApprox >>= pairToGenDoubleP
+    where pairToGenDoubleP (Approximate conf hi _ lo, actual) = return (fromRational $ toRational conf, if lo <= actual && actual <= hi then 1 else 0)
+  
 
 -- Obviously inefficient can be replaced.
 smallestCentralBinomialCoefficientGreaterThan :: Double -> Int
@@ -65,10 +67,23 @@ testSameConfidenceApproximates p genApprox =
             actualsToFirstConfAndActuals lst@(((Approximate c _ _ _),_):_) = return (toRational c, lst)
 
 -- A reasonable sample size to use for a desired Type I error rate,
--- Type II error rate, minimum meaningful difference, and upper bound
--- of square root of varriance. For a OneTailed test between two
--- normal distributions where the test passes/fails based on whether
--- the sample average is greater than standard normal distribution for
--- the desired Type I error rate.
+-- Type II error rate, minimum meaningful difference, and the standard
+-- deviation. For a OneTailed test between two normal distributions
+-- where the test passes/fails based on whether the sample average is
+-- greater than Za*stdDev/sqrt(sampleSize) where Za is the upper a
+-- percentage point of the standard normal distribution.
+
 minSampleSizeOneTailed :: Double -> Double -> Double -> Double -> Integer
-minSampleSizeOneTailed alpha beta minDiff sqrtVarriance = undefined
+minSampleSizeOneTailed alpha beta minDiff stdDev = ceiling $ ((upperPerOfNormDist alpha) - (inverseCumDist (1-beta)) / (minDiff/stdDev))^2
+
+minSampleSizeTwoTailed :: Double -> Double -> Double -> Double -> Integer
+minSampleSizeTwoTailed alpha = minSampleSizeOneTailed (alpha/2)
+
+upperPerOfNormDist :: Double -> Double
+upperPerOfNormDist alpha = undefined
+
+-- This is called the Probit and can be numerically approximated.
+inverseCumDist :: Double -> Double
+inverseCumDist point = undefined
+
+
