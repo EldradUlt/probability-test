@@ -37,13 +37,12 @@ testViaWilcoxMatchedPair :: Double -> Gen (Double, Double) -> Gen (Maybe TestRes
 testViaWilcoxMatchedPair p genPair = do
   samples <- vectorOf sampleSize genPair
   return $ wilcoxonMatchedPairTest OneTailed p (UV.fromList $ map fst samples) (UV.fromList $ map snd samples)
-    where sampleSize = (ceiling $ logBase 2 (1/p))
+    where sampleSize = min 1023 ((ceiling $ logBase 2 (1/p)) * 10)
 
-testApproximates :: Double -> Gen (Approximate Double, Double) -> Gen (Maybe TestResult)
+testApproximates ::(Ord a) => Double -> Gen (Approximate a, a) -> Gen (Maybe TestResult)
 testApproximates p genApprox = 
   testViaWilcoxMatchedPair p $ genApprox >>= pairToGenDoubleP
     where pairToGenDoubleP (Approximate conf hi _ lo, actual) = return (fromRational $ toRational conf, if lo <= actual && actual <= hi then 1 else 0)
-  
 
 -- Obviously inefficient can be replaced.
 smallestCentralBinomialCoefficientGreaterThan :: Double -> Int
