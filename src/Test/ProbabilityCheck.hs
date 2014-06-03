@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, ScopedTypeVariables #-}
+{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, ScopedTypeVariables, FlexibleContexts #-}
 
 module Test.ProbabilityCheck
        ( TestableDistribution
@@ -11,13 +11,19 @@ module Test.ProbabilityCheck
 import Test.QuickCheck (Gen, generate, vectorOf, frequency)
 import qualified Data.Vector.Unboxed as UV
 import Statistics.Test.Types (TestType(..), TestResult(..))
-import Statistics.Test.WilcoxonT (wilcoxonMatchedPairTest)
+import Statistics.Test.WilcoxonT (wilcoxonMatchedPairSignificant) --wilcoxonMatchedPairTest)
 import Statistics.Test.MannWhitneyU (mannWhitneyUtest)
+import Statistics.Types (Sample)
 import Test.Tasty.HUnit (testCase, (@=?))
 import Test.Tasty (TestTree)
 import Numeric.SpecFunctions (choose)
 import Data.Approximate (Approximate (..))
 import Data.Ratio (numerator, denominator)
+import qualified Data.Vector.Generic as G
+import Data.Function (on)
+import Statistics.Function (sortBy)
+import Data.Ord (comparing)
+import Numeric.Sum (kbn, sumVector)
 
 -- this class will have methods other than inspect however inspect
 -- will always be a sufficient minimal instantiation.
@@ -36,7 +42,7 @@ class SampleableDistribution s where
 testViaWilcoxMatchedPair :: Double -> Gen (Double, Double) -> Gen (Maybe TestResult)
 testViaWilcoxMatchedPair p genPair = do
   samples <- vectorOf sampleSize genPair
-  return $ wilcoxonMatchedPairTest OneTailed p (UV.fromList $ map fst samples) (UV.fromList $ map snd samples)
+  return $ wilcoxonMatchedPairTest' OneTailed p (UV.fromList $ map fst samples) (UV.fromList $ map snd samples)
     where sampleSize = min 1023 ((ceiling $ logBase 2 (1/p)) * 10)
 
 testApproximates ::(Ord a) => Double -> Gen (Approximate a, a) -> Gen (Maybe TestResult)
@@ -84,5 +90,65 @@ upperPerOfNormDist alpha = undefined
 -- This is called the Probit and can be numerically approximated.
 inverseCumDist :: Double -> Double
 inverseCumDist point = undefined
+
+wilcoxonMatchedPairTest' :: TestType -> Double -> Sample -> Sample -> Maybe TestResult
+wilcoxonMatchedPairTest' test p smp1 smp2 =
+  wilcoxonMatchedPairSignificant test (min n1 n2) p
+  $ wilcoxonMatchedPairSignedRank' smp1 smp2
+    where
+      n1 = UV.length smp1
+      n2 = UV.length smp2
+
+wilcoxonMatchedPairSignedRank' :: Sample -> Sample -> (Double, Double)
+wilcoxonMatchedPairSignedRank' a b = (sum' ranks1, negate (sum' ranks2))
+  where
+    (ranks1, ranks2) = splitByTags
+                       $ UV.zip tags (rank ((==) `on` abs) diffs)
+    (tags,diffs) = UV.unzip
+                   $ addTags                   -- Insert both positive and negative 0's and tag everything else positive or negative.
+                   $ UV.span  (/= 0.0)         -- Divide out equal elements
+                   $ sortBy (comparing abs)    -- Sort the differences by absolute difference
+                   $ UV.zipWith (-) a b        -- Work out differences
+    addTags (zeros,others) = (UV.++) (dupAndTag0s zeros) $ UV.map (\x -> (x>0 , x)) others
+    dupAndTag0s zeros
+      | UV.null zeros = UV.empty
+      | otherwise = UV.cons (True, 0) $ UV.cons (False, 0) $ dupAndTag0s $ UV.tail zeros
+  
+-- Private data type for unfolding
+data Rank v a = Rank {
+        rankCnt :: {-# UNPACK #-} !Int        -- Number of ranks to return
+    , rankVal :: {-# UNPACK #-} !Double     -- Rank to return
+    , rankNum :: {-# UNPACK #-} !Double     -- Current rank
+    , rankVec :: v a                        -- Remaining vector
+    }
+                
+                -- | Calculate rank of sample. Sample should be already sorted.
+rank :: (G.Vector v a, G.Vector v Double)
+        => (a -> a -> Bool)        -- ^ Equivalence relation
+        -> v a                     -- ^ Vector to rank
+        -> v Double
+rank eq vec = G.unfoldr go (Rank 0 (-1) 1 vec)
+  where
+    go (Rank 0 _ r v)
+      | G.null v  = Nothing
+      | otherwise =
+          case G.length h of
+            1 -> Just (r, Rank 0 0 (r+1) rest)
+            n -> go Rank { rankCnt = n
+                         , rankVal = 0.5 * (r*2 + fromIntegral (n-1))
+                         , rankNum = r + fromIntegral n
+                         , rankVec = rest
+                         }
+          where
+            (h,rest) = G.span (eq $ G.head v) v
+    go (Rank n val r v) = Just (val, Rank (n-1) val r v)
+
+splitByTags :: (G.Vector v a, G.Vector v (Bool,a)) => v (Bool,a) -> (v a, v a)
+splitByTags vs = (G.map snd a, G.map snd b)
+  where
+    (a,b) = G.unstablePartition fst vs
+
+sum' :: (G.Vector v Double) => v Double -> Double
+sum' = sumVector kbn
 
 
