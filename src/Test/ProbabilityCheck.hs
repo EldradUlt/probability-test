@@ -78,18 +78,36 @@ testSameConfidenceApproximates p genApprox =
 -- greater than Za*stdDev/sqrt(sampleSize) where Za is the upper a
 -- percentage point of the standard normal distribution.
 
-minSampleSizeOneTailed :: Double -> Double -> Double -> Double -> Integer
+minSampleSize :: (Num a, Integral b) => Bool -> a -> a -> a -> a -> b
+minSampleSize oneTailed = if oneTailed then minSampleSizeOneTailed else minSampleSizeTwoTailed
+
+minSampleSizeOneTailed :: (Num a, Integral b) => a -> a -> a -> a -> b
 minSampleSizeOneTailed alpha beta minDiff stdDev = ceiling $ ((upperPerOfNormDist alpha) - (inverseCumDist (1-beta)) / (minDiff/stdDev))^2
 
-minSampleSizeTwoTailed :: Double -> Double -> Double -> Double -> Integer
+minSampleSizeTwoTailed :: (Num a, Integral b) => a -> a -> a -> a -> b
 minSampleSizeTwoTailed alpha = minSampleSizeOneTailed (alpha/2)
 
-upperPerOfNormDist :: Double -> Double
+upperPerOfNormDist :: (Num a) => a -> a
 upperPerOfNormDist alpha = undefined
 
 -- This is called the Probit and can be numerically approximated.
-inverseCumDist :: Double -> Double
+inverseCumDist :: (Num a) => a -> a
 inverseCumDist point = undefined
+
+data StreamStdDev a = StreamStdDev
+    { ssdCount :: Integer
+    , ssdMean :: a
+    , ssdStdDev :: a
+    }
+
+initSSD :: (Num a) => a -> StreamStdDev a
+initSSD x = StreamStd 1 x 0
+
+updateSSD :: (Num a) => a -> StreamStdDev a -> StreamStdDev a
+updateSSD x (StreamStdDev prevC prevM prevS) = StreamStdDev {}
+    where newC = prevC + 1
+          newM = prevM + (x-prevM)/newC
+          newS = prevS + (x-prevM)*(x-newM)
 
 wilcoxonMatchedPairTest' :: TestType -> Double -> Sample -> Sample -> Maybe TestResult
 wilcoxonMatchedPairTest' test p smp1 smp2 =
