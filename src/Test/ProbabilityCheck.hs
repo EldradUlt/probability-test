@@ -71,6 +71,11 @@ testSameConfidenceApproximates p genApprox =
             pairsToSample = boolsToSample . map pairToBool
             actualsToFirstConfAndActuals lst@(((Approximate c _ _ _),_):_) = return (toRational c, lst)
 
+-- This probably wants better naming at some point.
+data DistributionTestResult = TestSame
+                            | TestSmaller
+                            | TestGreater
+
 -- A reasonable sample size to use for a desired Type I error rate,
 -- Type II error rate, minimum meaningful difference, and the standard
 -- deviation. For a OneTailed test between two normal distributions
@@ -78,20 +83,28 @@ testSameConfidenceApproximates p genApprox =
 -- greater than Za*stdDev/sqrt(sampleSize) where Za is the upper a
 -- percentage point of the standard normal distribution.
 
-minSampleSize :: (RealFrac a, Integral b) => TestType -> a -> a -> a -> a -> b
+testNormalDistribution :: (Num a, Floating b, Ord b) => a -> b -> Integer -> b -> DistributionTestResult
+testNormalDistribution alpha stdDev count actualDiff =
+  if actualDiff > upperTest then TestGreater
+  else if actualDiff < lowerTest then TestSmaller
+       else TestSame
+    where upperTest = (upperPerOfNormDist alpha) * stdDev / (sqrt $ fromIntegral count)
+          lowerTest = upperTest * (-1)
+
+minSampleSize :: (Fractional a, RealFrac b, Integral c) => TestType -> a -> a -> b -> b -> c
 minSampleSize testType = if testType == OneTailed then minSampleSizeOneTailed else minSampleSizeTwoTailed
 
-minSampleSizeOneTailed :: (RealFrac a, Integral b) => a -> a -> a -> a -> b
+minSampleSizeOneTailed :: (Num a, RealFrac b, Integral c) => a -> a -> b -> b -> c
 minSampleSizeOneTailed alpha beta minDiff stdDev = ceiling $ ((upperPerOfNormDist alpha) - (inverseCumDist (1-beta)) / (minDiff/stdDev))^2
 
-minSampleSizeTwoTailed :: (RealFrac a, Integral b) => a -> a -> a -> a -> b
+minSampleSizeTwoTailed :: (Fractional a, RealFrac b, Integral c) => a -> a -> b -> b -> c
 minSampleSizeTwoTailed alpha = minSampleSizeOneTailed (alpha/2)
 
-upperPerOfNormDist :: (Num a) => a -> a
+upperPerOfNormDist :: (Num a, Num b) => a -> b
 upperPerOfNormDist alpha = undefined
 
 -- This is called the Probit and can be numerically approximated.
-inverseCumDist :: (Num a) => a -> a
+inverseCumDist :: (Num a, Num b) => a -> b
 inverseCumDist point = undefined
 
 data StreamStdDev a = StreamStdDev
