@@ -24,7 +24,7 @@ import Data.Function (on)
 import Statistics.Function (sortBy)
 import Data.Ord (comparing)
 import Numeric.Sum (kbn, sumVector)
-import Data.Conduit (Sink)
+import Data.Conduit (Sink, await)
 
 -- this class will have methods other than inspect however inspect
 -- will always be a sufficient minimal instantiation.
@@ -84,14 +84,14 @@ data DistributionTestResult = TestSame
 -- greater than Za*stdDev/sqrt(sampleSize) where Za is the upper a
 -- percentage point of the standard normal distribution.
 
-testNormDistSink :: (Num a, Floating b, Ord b) => a -> a -> b -> Sink b m (Maybe DistributionTestResult)
+testNormDistSink :: (Fractional a, RealFrac b, Floating b, Ord b, Monad m) => a -> a -> b -> Sink b m (Maybe DistributionTestResult)
 testNormDistSink alpha beta minDiff = do
   mNext <- await
   case mNext of
     Nothing -> return Nothing
     Just n -> testNormDistSink' alpha beta minDiff $ initSSD n
 
-testNormDistSink' :: (Num a, Floating b, Ord b) => a -> a -> b -> StreamStdDev b -> Sink b m (Maybe DistributionTestResult)
+testNormDistSink' :: (Fractional a, RealFrac b, Floating b, Ord b, Monad m) => a -> a -> b -> StreamStdDev b -> Sink b m (Maybe DistributionTestResult)
 testNormDistSink' alpha beta minDiff ssd = do
   mNext <- await
   case mNext of
@@ -134,7 +134,7 @@ data StreamStdDev a = StreamStdDev
     , ssdStdDev :: a
     }
 
-initSSD :: a -> StreamStdDev a
+initSSD :: (Num a) => a -> StreamStdDev a
 initSSD x = StreamStdDev 1 x 0
 
 updateSSD :: (Fractional a) => a -> StreamStdDev a -> StreamStdDev a

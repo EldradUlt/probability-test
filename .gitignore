@@ -1,3 +1,6 @@
+# Compiled Files #
+dist/*
+
 # Emacs files #
 *~
 \#*\#
