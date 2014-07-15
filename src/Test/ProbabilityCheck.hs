@@ -3,6 +3,7 @@
 module Test.ProbabilityCheck
        ( TestableDistribution
        , SampleableDistribution
+       , testNormDistSink
        , testViaWilcoxMatchedPair
        , testApproximates
        , testSameConfidenceApproximates
@@ -76,6 +77,7 @@ testSameConfidenceApproximates p genApprox =
 data DistributionTestResult = TestSame
                             | TestSmaller
                             | TestGreater
+                              deriving (Show, Eq)
 
 -- A reasonable sample size to use for a desired Type I error rate,
 -- Type II error rate, minimum meaningful difference, and the standard
