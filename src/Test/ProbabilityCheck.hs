@@ -87,14 +87,14 @@ data DistributionTestResult = TestSame
 -- greater than Za*stdDev/sqrt(sampleSize) where Za is the upper a
 -- percentage point of the standard normal distribution.
 
-testNormDistSink :: (Erf a, InvErf a, RealFrac a, Floating a, Ord a, Monad m) => a -> a -> a -> Sink a m (Maybe DistributionTestResult)
+testNormDistSink :: (Erf a, InvErf a, RealFrac a, Ord a, Monad m) => a -> a -> a -> Sink a m (Maybe DistributionTestResult)
 testNormDistSink alpha beta minDiff = do
   mNext <- await
   case mNext of
     Nothing -> return Nothing
     Just n -> testNormDistSink' alpha beta minDiff $ initSSD n
 
-testNormDistSink' :: (Erf a, InvErf a, RealFrac a, Floating a, Ord a, Monad m) =>
+testNormDistSink' :: (Erf a, InvErf a, RealFrac a, Ord a, Monad m) =>
                      a -> a -> a -> StreamStdDev a -> Sink a m (Maybe DistributionTestResult)
 testNormDistSink' alpha beta minDiff ssd = do
   mNext <- await
@@ -108,7 +108,7 @@ testNormDistSink' alpha beta minDiff ssd = do
               count = ssdCount newSSD
               mean = ssdMean newSSD
 
-testNormalDistribution :: (Erf a, InvErf a, Floating a, Ord a, Integral b) => a -> a -> b -> a -> DistributionTestResult
+testNormalDistribution :: (Erf a, Ord a, Integral b) => a -> a -> b -> a -> DistributionTestResult
 testNormalDistribution alpha stdDev count actualDiff =
   if actualDiff > upperTest then TestGreater
   else if actualDiff < lowerTest then TestSmaller
