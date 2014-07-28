@@ -26,6 +26,7 @@ import Statistics.Function (sortBy)
 import Data.Ord (comparing)
 import Numeric.Sum (kbn, sumVector)
 import Data.Conduit (Sink)
+import Data.Number.Erf (invnormcdf)
 
 -- this class will have methods other than inspect however inspect
 -- will always be a sufficient minimal instantiation.
@@ -127,8 +128,8 @@ upperPerOfNormDist :: (Num a, Num b) => a -> b
 upperPerOfNormDist alpha = undefined
 
 -- This is called the Probit and can be numerically approximated.
-inverseCumDist :: (Num a, Num b) => a -> b
-inverseCumDist point = undefined
+inverseCumDist :: (InvErf a) => a -> a
+inverseCumDist = invnormcdf
 
 data StreamStdDev a = StreamStdDev
     { ssdCount :: Integer
