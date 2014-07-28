@@ -9,7 +9,7 @@ import Test.QuickCheck (choose, Gen, arbitrary, generate)
 import Test.QuickCheck.Property (failed, succeeded, Result(..))
 import Statistics.Test.Types (TestResult(..))
 import Numeric.Log
-import Data.Conduit (($$))
+import Data.Conduit (($$), Source)
 import qualified Data.Conduit.List as CL
 import System.Random.MWC (create)
 import System.Random.MWC.Distributions (normal)
@@ -18,7 +18,7 @@ main :: IO ()
 main =
   defaultMain $
   testGroup "probability-test's Tests"
-  [ testGroup "Tests for "
+  [ testGroup "Tests for Same Confidence Approximates"
     [ testProperty "Correct Approximates claiming 100% accuracy never fails test." $ do
          testResult <- testSameConfidenceApproximates 0.05 $ genApproximate 1 1
          case testResult of
@@ -55,25 +55,32 @@ main =
       ((Just NotSignificant) @=?) =<< (generate $ testApproximates 0.05 $ genVerriedApproximate 0)
     ]
   , testGroup "Tests for testNormDistSink"
-    [ testCase "Passing simple case" $ (Just TestSame) @=? (zeroSource $$ testNormDistSink 0.05 0.05 0.01)
-    , testCase "Failing simple case" $ (Just TestGreater) @=? (oneOnehundrethSource $$ testNormDistSink 0.05 0.05 0.01)
-    , testCase "Passing self test" $ (Just TestSame) @=?
+    [ testCase "Passing simple case" $ assertEqToIO (Just TestSame) $ zeroSource $$ testNormDistSink 0.05 0.05 0.01
+    , testCase "Failing simple case" $ assertEqToIO (Just TestGreater) $ oneOnehundrethSource $$ testNormDistSink 0.05 0.05 0.01
+    , testCase "Passing self test" $ assertEqToIO (Just TestSame) $
                ( (CL.unfoldM (\_ -> do
-                                passed <- (Just TestSame) == (zeroSource $$ testNormDistSink 0.05 0.05 0.01)
-                                return (if passed then 0 else 1)) ())
+                                 res <- zeroSource $$ testNormDistSink 0.05 0.05 0.01
+                                 return $ Just (if Just TestSame == res then (0 :: Double) else 1, ())) ())
                  $$ testNormDistSink 0.05 0.05 1)
-    , testCase "Failing self test" $ (Just TestSame) @=?
+    , testCase "Failing self test" $ assertEqToIO (Just TestSame) $
                ( (CL.unfoldM (\_ -> do
-                                passed <- (Just TestGreater) == (oneOnehundrethSource $$ testNormDistSink 0.05 0.05 0.01)
-                                return (if passed then 0 else 1)) ())
+                                 res <- oneOnehundrethSource $$ testNormDistSink 0.05 0.05 0.01
+                                 return $ Just (if Just TestGreater == res then (0 :: Double) else 1, ())) ())
                  $$ testNormDistSink 0.05 0.05 1)
     ]
   ]
 
+assertEqToIO :: (Show a, Eq a) => a -> IO a -> Assertion
+assertEqToIO a bIO = do
+  b <- bIO
+  a @=? b
+
 normalDoubleSource :: Double -> Source IO Double
 normalDoubleSource mean = CL.unfoldM (\_ -> do
                                         gen <- create
-                                        normal mean 1 gen) ()
+                                        res <- normal mean 1 gen
+                                        return $ Just (res, ())
+                                     ) ()
 
 zeroSource :: Source IO Double
 zeroSource = normalDoubleSource 0

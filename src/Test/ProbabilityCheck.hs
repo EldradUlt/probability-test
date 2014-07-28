@@ -4,6 +4,7 @@ module Test.ProbabilityCheck
        ( TestableDistribution
        , SampleableDistribution
        , testNormDistSink
+       , DistributionTestResult(..)
        , testViaWilcoxMatchedPair
        , testApproximates
        , testSameConfidenceApproximates
