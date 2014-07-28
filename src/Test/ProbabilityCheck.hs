@@ -26,7 +26,7 @@ import Statistics.Function (sortBy)
 import Data.Ord (comparing)
 import Numeric.Sum (kbn, sumVector)
 import Data.Conduit (Sink, await)
-import Data.Number.Erf (invnormcdf)
+import Data.Number.Erf (invnormcdf, normcdf, Erf, InvErf)
 
 -- this class will have methods other than inspect however inspect
 -- will always be a sufficient minimal instantiation.
@@ -87,14 +87,15 @@ data DistributionTestResult = TestSame
 -- greater than Za*stdDev/sqrt(sampleSize) where Za is the upper a
 -- percentage point of the standard normal distribution.
 
-testNormDistSink :: (Fractional a, RealFrac b, Floating b, Ord b, Monad m) => a -> a -> b -> Sink b m (Maybe DistributionTestResult)
+testNormDistSink :: (Erf a, InvErf a, RealFrac a, Floating a, Ord a, Monad m) => a -> a -> a -> Sink a m (Maybe DistributionTestResult)
 testNormDistSink alpha beta minDiff = do
   mNext <- await
   case mNext of
     Nothing -> return Nothing
     Just n -> testNormDistSink' alpha beta minDiff $ initSSD n
 
-testNormDistSink' :: (Fractional a, RealFrac b, Floating b, Ord b, Monad m) => a -> a -> b -> StreamStdDev b -> Sink b m (Maybe DistributionTestResult)
+testNormDistSink' :: (Erf a, InvErf a, RealFrac a, Floating a, Ord a, Monad m) =>
+                     a -> a -> a -> StreamStdDev a -> Sink a m (Maybe DistributionTestResult)
 testNormDistSink' alpha beta minDiff ssd = do
   mNext <- await
   case mNext of
@@ -107,7 +108,7 @@ testNormDistSink' alpha beta minDiff ssd = do
               count = ssdCount newSSD
               mean = ssdMean newSSD
 
-testNormalDistribution :: (Num a, Floating b, Ord b, Integral c) => a -> b -> c -> b -> DistributionTestResult
+testNormalDistribution :: (Erf a, InvErf a, Floating a, Ord a, Integral b) => a -> a -> b -> a -> DistributionTestResult
 testNormalDistribution alpha stdDev count actualDiff =
   if actualDiff > upperTest then TestGreater
   else if actualDiff < lowerTest then TestSmaller
@@ -115,17 +116,17 @@ testNormalDistribution alpha stdDev count actualDiff =
     where upperTest = (upperPerOfNormDist alpha) * stdDev / (sqrt $ fromIntegral count)
           lowerTest = upperTest * (-1)
 
-minSampleSize :: (Fractional a, RealFrac b, Integral c) => TestType -> a -> a -> b -> b -> c
+minSampleSize :: (Erf a, InvErf a, RealFrac a, Integral b) => TestType -> a -> a -> a -> a -> b
 minSampleSize testType = if testType == OneTailed then minSampleSizeOneTailed else minSampleSizeTwoTailed
 
-minSampleSizeOneTailed :: (Num a, RealFrac b, Integral c) => a -> a -> b -> b -> c
+minSampleSizeOneTailed :: (Erf a, InvErf a, RealFrac a, Integral b) => a -> a -> a -> a -> b
 minSampleSizeOneTailed alpha beta minDiff stdDev = ceiling $ ((upperPerOfNormDist alpha) - (inverseCumDist (1-beta)) / (minDiff/stdDev))^2
 
-minSampleSizeTwoTailed :: (Fractional a, RealFrac b, Integral c) => a -> a -> b -> b -> c
+minSampleSizeTwoTailed :: (Erf a, InvErf a, RealFrac a, Integral b) => a -> a -> a -> a -> b
 minSampleSizeTwoTailed alpha = minSampleSizeOneTailed (alpha/2)
 
-upperPerOfNormDist :: (Num a, Num b) => a -> b
-upperPerOfNormDist alpha = undefined
+upperPerOfNormDist :: (Erf a) => a -> a
+upperPerOfNormDist = normcdf
 
 -- This is called the Probit and can be numerically approximated.
 inverseCumDist :: (InvErf a) => a -> a
