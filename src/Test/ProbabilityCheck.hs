@@ -3,6 +3,7 @@
 module Test.ProbabilityCheck
        ( TestableDistribution
        , SampleableDistribution
+       , testNormDistSink
        , testViaWilcoxMatchedPair
        , testApproximates
        , testSameConfidenceApproximates
@@ -24,7 +25,12 @@ import Data.Function (on)
 import Statistics.Function (sortBy)
 import Data.Ord (comparing)
 import Numeric.Sum (kbn, sumVector)
+<<<<<<< HEAD
 import Data.Conduit (Sink, await)
+=======
+import Data.Conduit (Sink)
+import Data.Number.Erf (invnormcdf)
+>>>>>>> 07f58cdddba403d33e3645e521b0485a9cc33985
 
 -- this class will have methods other than inspect however inspect
 -- will always be a sufficient minimal instantiation.
@@ -76,6 +82,7 @@ testSameConfidenceApproximates p genApprox =
 data DistributionTestResult = TestSame
                             | TestSmaller
                             | TestGreater
+                              deriving (Show, Eq)
 
 -- A reasonable sample size to use for a desired Type I error rate,
 -- Type II error rate, minimum meaningful difference, and the standard
@@ -125,8 +132,8 @@ upperPerOfNormDist :: (Num a, Num b) => a -> b
 upperPerOfNormDist alpha = undefined
 
 -- This is called the Probit and can be numerically approximated.
-inverseCumDist :: (Num a, Num b) => a -> b
-inverseCumDist point = undefined
+inverseCumDist :: (InvErf a) => a -> a
+inverseCumDist = invnormcdf
 
 data StreamStdDev a = StreamStdDev
     { ssdCount :: Integer
