@@ -4,7 +4,7 @@ module Test.ProbabilityCheck
        ( TestableDistribution
        , SampleableDistribution
        , testNormDistSink
-       , DistributionTestResult(..)
+       , DistributionTestResult(..), DistributionTestValue(..)
        , testViaWilcoxMatchedPair
        , testApproximates
        , testSameConfidenceApproximates
@@ -76,10 +76,21 @@ testSameConfidenceApproximates p genApprox =
             actualsToFirstConfAndActuals lst@(((Approximate c _ _ _),_):_) = return (toRational c, lst)
 
 -- This probably wants better naming at some point.
-data DistributionTestResult = TestSame
-                            | TestSmaller
-                            | TestGreater
-                              deriving (Show, Eq)
+data DistributionTestResult a = DistributionTestResult
+                                { dtrValue :: DistributionTestValue
+                                , dtrTestedMean :: a
+                                , dtrStdDev :: a
+                                , dtrSampleSize :: Integer
+                                , dtrUpperBound :: a
+                                , dtrLowerBound :: a
+                                }
+                              deriving (Show, Eq) 
+
+data DistributionTestValue = TestSame
+                           | TestSmaller
+                           | TestGreater
+                           | TestInsufficientSample
+                           deriving (Show, Eq)
 
 -- A reasonable sample size to use for a desired Type I error rate,
 -- Type II error rate, minimum meaningful difference, and the standard
@@ -88,34 +99,39 @@ data DistributionTestResult = TestSame
 -- greater than Za*stdDev/sqrt(sampleSize) where Za is the upper a
 -- percentage point of the standard normal distribution.
 
-testNormDistSink :: (Erf a, InvErf a, RealFrac a, Ord a, Monad m) => a -> a -> a -> Sink a m (Maybe DistributionTestResult)
+testNormDistSink :: (Erf a, InvErf a, RealFrac a, Ord a, Monad m) => a -> a -> a -> Sink a m (DistributionTestResult a)
 testNormDistSink alpha beta minDiff = do
   mNext <- await
   case mNext of
-    Nothing -> return Nothing
+    Nothing -> return $ DistributionTestResult TestInsufficientSample 0 0 0 0 0
     Just n -> testNormDistSink' alpha beta minDiff $ initSSD n
 
 testNormDistSink' :: (Erf a, InvErf a, RealFrac a, Ord a, Monad m) =>
-                     a -> a -> a -> StreamStdDev a -> Sink a m (Maybe DistributionTestResult)
+                     a -> a -> a -> StreamStdDev a -> Sink a m (DistributionTestResult a)
 testNormDistSink' alpha beta minDiff ssd = do
   mNext <- await
   case mNext of
-    Nothing -> return Nothing
+    Nothing -> return $ DistributionTestResult
+               { dtrValue = TestInsufficientSample, dtrTestedMean = ssdMean ssd, dtrStdDev = ssdStdDev ssd
+               , dtrSampleSize = ssdCount ssd, dtrUpperBound = 0, dtrLowerBound = 0}
     Just next -> if minSampleSizeTwoTailed alpha beta minDiff stdDev <= count
-                 then return $ Just $ testNormalDistribution alpha stdDev count mean
+                 then return $ testNormalDistribution alpha stdDev count mean
                  else testNormDistSink' alpha beta minDiff newSSD
         where newSSD = updateSSD next ssd
               stdDev = ssdStdDev newSSD
               count = ssdCount newSSD
               mean = ssdMean newSSD
 
-testNormalDistribution :: (Erf a, Ord a, Integral b) => a -> a -> b -> a -> DistributionTestResult
+testNormalDistribution :: (Erf a, Ord a, Integral b) => a -> a -> b -> a -> DistributionTestResult a
 testNormalDistribution alpha stdDev count actualDiff =
-  if actualDiff > upperTest then TestGreater
-  else if actualDiff < lowerTest then TestSmaller
-       else TestSame
+  if actualDiff > upperTest then res {dtrValue = TestGreater}
+  else if actualDiff < lowerTest then res {dtrValue = TestSmaller}
+       else res {dtrValue = TestSame}
     where upperTest = (upperPerOfNormDist alpha) * stdDev / (sqrt $ fromIntegral count)
           lowerTest = upperTest * (-1)
+          res = DistributionTestResult { dtrValue = undefined, dtrTestedMean = actualDiff, dtrStdDev = stdDev
+                                       , dtrSampleSize = fromIntegral count, dtrUpperBound = upperTest
+                                       , dtrLowerBound = lowerTest}
 
 minSampleSize :: (Erf a, InvErf a, RealFrac a, Integral b) => TestType -> a -> a -> a -> a -> b
 minSampleSize testType = if testType == OneTailed then minSampleSizeOneTailed else minSampleSizeTwoTailed

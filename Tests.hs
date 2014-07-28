@@ -55,25 +55,28 @@ main =
       ((Just NotSignificant) @=?) =<< (generate $ testApproximates 0.05 $ genVerriedApproximate 0)
     ]
   , testGroup "Tests for testNormDistSink"
-    [ testCase "Passing simple case" $ assertEqToIO (Just TestSame) $ zeroSource $$ testNormDistSink 0.05 0.05 0.01
-    , testCase "Failing simple case" $ assertEqToIO (Just TestGreater) $ oneOnehundrethSource $$ testNormDistSink 0.05 0.05 0.01
-    , testCase "Passing self test" $ assertEqToIO (Just TestSame) $
+    [ testCase "Passing simple case" $ assertResHasVal TestSame $ zeroSource $$ testNormDistSink 0.05 0.05 0.01
+    , testCase "Failing simple case" $ assertResHasVal TestGreater $ oneOnehundrethSource $$ testNormDistSink 0.05 0.05 0.01
+    , testCase "Passing self test" $ assertResHasVal TestSame $
                ( (CL.unfoldM (\_ -> do
                                  res <- zeroSource $$ testNormDistSink 0.05 0.05 0.01
-                                 return $ Just (if Just TestSame == res then (0 :: Double) else 1, ())) ())
+                                 return $ Just (if TestSame == dtrValue res then (0 :: Double) else 1, ())) ())
                  $$ testNormDistSink 0.05 0.05 1)
-    , testCase "Failing self test" $ assertEqToIO (Just TestSame) $
+    , testCase "Failing self test" $ assertResHasVal TestSame $
                ( (CL.unfoldM (\_ -> do
                                  res <- oneOnehundrethSource $$ testNormDistSink 0.05 0.05 0.01
-                                 return $ Just (if Just TestGreater == res then (0 :: Double) else 1, ())) ())
+                                 return $ Just (if TestGreater == dtrValue res then (0 :: Double) else 1, ())) ())
                  $$ testNormDistSink 0.05 0.05 1)
     ]
   ]
 
-assertEqToIO :: (Show a, Eq a) => a -> IO a -> Assertion
-assertEqToIO a bIO = do
+assertResHasVal :: DistributionTestValue -> IO (DistributionTestResult Double) -> Assertion
+assertResHasVal a bIO = do
   b <- bIO
-  a @=? b
+  if a == dtrValue b
+    then return ()
+    else assertFailure (  "Expected: " ++ (show a)
+                       ++ "\nGot: " ++ (show b) )
 
 normalDoubleSource :: Double -> Source IO Double
 normalDoubleSource mean = CL.unfoldM (\_ -> do
