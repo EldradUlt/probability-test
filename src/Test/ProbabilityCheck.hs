@@ -25,12 +25,8 @@ import Data.Function (on)
 import Statistics.Function (sortBy)
 import Data.Ord (comparing)
 import Numeric.Sum (kbn, sumVector)
-<<<<<<< HEAD
 import Data.Conduit (Sink, await)
-=======
-import Data.Conduit (Sink)
 import Data.Number.Erf (invnormcdf)
->>>>>>> 07f58cdddba403d33e3645e521b0485a9cc33985
 
 -- this class will have methods other than inspect however inspect
 -- will always be a sufficient minimal instantiation.
