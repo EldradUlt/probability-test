@@ -8,6 +8,8 @@ module Test.ProbabilityCheck
        , testViaWilcoxMatchedPair
        , testApproximates
        , testSameConfidenceApproximates
+       , minSampleSize
+       , updateSSD, initSSD, StreamStdDev, conduitSSD
        ) where
 
 import Test.QuickCheck (Gen, generate, vectorOf, frequency)
@@ -26,8 +28,10 @@ import Data.Function (on)
 import Statistics.Function (sortBy)
 import Data.Ord (comparing)
 import Numeric.Sum (kbn, sumVector)
-import Data.Conduit (Sink, await)
+import Data.Conduit (Sink, Conduit, await, yield)
+import qualified Data.Conduit.List as CL
 import Data.Number.Erf (invnormcdf, normcdf, Erf, InvErf)
+import Control.Monad (void)
 
 -- this class will have methods other than inspect however inspect
 -- will always be a sufficient minimal instantiation.
@@ -114,13 +118,14 @@ testNormDistSink' alpha beta minDiff ssd = do
     Nothing -> return $ DistributionTestResult
                { dtrValue = TestInsufficientSample, dtrTestedMean = ssdMean ssd, dtrStdDev = ssdStdDev ssd
                , dtrSampleSize = ssdCount ssd, dtrUpperBound = 0, dtrLowerBound = 0}
-    Just next -> if minSampleSizeTwoTailed alpha beta minDiff stdDev <= count
+    Just next -> if minSampleSize <= count || count >= 200
                  then return $ testNormalDistribution alpha stdDev count mean
                  else testNormDistSink' alpha beta minDiff newSSD
         where newSSD = updateSSD next ssd
               stdDev = ssdStdDev newSSD
               count = ssdCount newSSD
               mean = ssdMean newSSD
+              minSampleSize = max (minSampleSizeTwoTailed alpha beta minDiff stdDev) 5
 
 testNormalDistribution :: (Erf a, Ord a, Integral b) => a -> a -> b -> a -> DistributionTestResult a
 testNormalDistribution alpha stdDev count actualDiff =
@@ -152,17 +157,51 @@ inverseCumDist = invnormcdf
 data StreamStdDev a = StreamStdDev
     { ssdCount :: Integer
     , ssdMean :: a
-    , ssdStdDev :: a
+    , ssdS :: a
     }
+    deriving (Show)
+
+ssdStdDev :: (Floating a) => StreamStdDev a -> a
+ssdStdDev ssd = sqrt ((ssdS ssd) / ((fromIntegral $ ssdCount ssd) - 1))
 
 initSSD :: (Num a) => a -> StreamStdDev a
 initSSD x = StreamStdDev 1 x 0
 
 updateSSD :: (Fractional a) => a -> StreamStdDev a -> StreamStdDev a
-updateSSD x (StreamStdDev prevC prevM prevS) = StreamStdDev {ssdCount = newC, ssdMean = newM, ssdStdDev = newS}
+updateSSD x (StreamStdDev prevC prevM prevS) = StreamStdDev {ssdCount = newC, ssdMean = newM, ssdS = newS}
     where newC = prevC + 1
           newM = prevM + (x-prevM)/(fromIntegral newC)
           newS = prevS + (x-prevM)*(x-newM)
+
+conduitSSD :: (Fractional a, Monad m) => Conduit a m (StreamStdDev a, a)
+conduitSSD = do
+  mFirst <- await
+  case mFirst of
+    Nothing -> return ()
+    Just first -> do
+      yield (initSSD first, first) 
+      void $ CL.mapAccum updateSSDPair $ initSSD first
+        where updateSSDPair a s = (updateSSD a s, (updateSSD a s, a))
+
+{-
+conduitSSD :: (Fractional a, Monad m) => Conduit a m (a, StreamStdDev a)
+conduitSSD = do
+  mNext <- await
+  case mNext of
+    Nothing -> return ()
+    Just n -> do
+      yield (n, initSSD n)
+      conduitSSD' (initSSD n)
+
+conduitSSD' :: (Fractional a, Monad m) => StreamStdDev a -> Conduit a m (a, StreamStdDev a)
+conduitSSD' ssd = do
+  mNext <- await
+  case mNext of
+    Nothing -> return ()
+    Just n -> do
+      yield (n, updateSSD n ssd)
+      conduitSSD' $ updateSSD n ssd
+-}
 
 wilcoxonMatchedPairTest' :: TestType -> Double -> Sample -> Sample -> Maybe TestResult
 wilcoxonMatchedPairTest' test p smp1 smp2 =
