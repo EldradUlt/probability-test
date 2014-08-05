@@ -118,7 +118,7 @@ testNormDistSink' alpha beta minDiff ssd = do
     Nothing -> return $ DistributionTestResult
                { dtrValue = TestInsufficientSample, dtrTestedMean = ssdMean ssd, dtrStdDev = ssdStdDev ssd
                , dtrSampleSize = ssdCount ssd, dtrUpperBound = 0, dtrLowerBound = 0}
-    Just next -> if minSampleSize <= count || count >= 200
+    Just next -> if minSampleSize <= count
                  then return $ testNormalDistribution alpha stdDev count mean
                  else testNormDistSink' alpha beta minDiff newSSD
         where newSSD = updateSSD next ssd
