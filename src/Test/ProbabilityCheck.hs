@@ -4,12 +4,13 @@ module Test.ProbabilityCheck
        ( TestableDistribution
        , SampleableDistribution
        , testNormDistSink
-       , DistributionTestResult(..), DistributionTestValue(..)
+       , DistributionTestResult(..), DistributionTestValue(..), DistributionTestSummary(..), initDTS
        , testViaWilcoxMatchedPair
        , testApproximates
        , testSameConfidenceApproximates
        , minSampleSize
        , updateSSD, initSSD, StreamStdDev, conduitSSD
+       , upperPerOfNormDist
        ) where
 
 import Test.QuickCheck (Gen, generate, vectorOf, frequency)
@@ -30,8 +31,9 @@ import Data.Ord (comparing)
 import Numeric.Sum (kbn, sumVector)
 import Data.Conduit (Sink, Conduit, await, yield)
 import qualified Data.Conduit.List as CL
-import Data.Number.Erf (invnormcdf, normcdf, Erf, InvErf)
+import Data.Number.Erf (invnormcdf, InvErf)
 import Control.Monad (void)
+import Data.Map.Strict (Map, singleton)
 
 -- this class will have methods other than inspect however inspect
 -- will always be a sufficient minimal instantiation.
@@ -90,11 +92,24 @@ data DistributionTestResult a = DistributionTestResult
                                 }
                               deriving (Show, Eq) 
 
-data DistributionTestValue = TestSame
-                           | TestSmaller
-                           | TestGreater
+data DistributionTestValue = TestZero
+                           | TestNegative
+                           | TestPositive
                            | TestInsufficientSample
-                           deriving (Show, Eq)
+                           deriving (Show, Eq, Ord)
+
+data DistributionTestSummary a = DistributionTestSummary
+                                 { dtsValues :: Map DistributionTestValue Integer
+                                 , dtsMeans :: StreamStdDev a
+                                 , dtsStdDevs :: StreamStdDev a
+                                 , dtsSampleSizes :: StreamStdDev a
+                                 , dtsUpperBounds :: StreamStdDev a
+                                 , dtsLowerBounds :: StreamStdDev a
+                                 } deriving (Show, Eq)
+
+initDTS :: (Num a) => DistributionTestResult a -> DistributionTestSummary a
+initDTS (DistributionTestResult val mean stddev size upper lower) = 
+  DistributionTestSummary (singleton val 1) (initSSD mean) (initSSD stddev) (initSSD $ fromIntegral size) (initSSD upper) (initSSD lower)
 
 -- A reasonable sample size to use for a desired Type I error rate,
 -- Type II error rate, minimum meaningful difference, and the standard
@@ -103,14 +118,14 @@ data DistributionTestValue = TestSame
 -- greater than Za*stdDev/sqrt(sampleSize) where Za is the upper a
 -- percentage point of the standard normal distribution.
 
-testNormDistSink :: (Erf a, InvErf a, RealFrac a, Ord a, Monad m) => a -> a -> a -> Sink a m (DistributionTestResult a)
+testNormDistSink :: (InvErf a, RealFrac a, Ord a, Monad m) => a -> a -> a -> Sink a m (DistributionTestResult a)
 testNormDistSink alpha beta minDiff = do
   mNext <- await
   case mNext of
     Nothing -> return $ DistributionTestResult TestInsufficientSample 0 0 0 0 0
     Just n -> testNormDistSink' alpha beta minDiff $ initSSD n
 
-testNormDistSink' :: (Erf a, InvErf a, RealFrac a, Ord a, Monad m) =>
+testNormDistSink' :: (InvErf a, RealFrac a, Ord a, Monad m) =>
                      a -> a -> a -> StreamStdDev a -> Sink a m (DistributionTestResult a)
 testNormDistSink' alpha beta minDiff ssd = do
   mNext <- await
@@ -127,28 +142,28 @@ testNormDistSink' alpha beta minDiff ssd = do
               mean = ssdMean newSSD
               minSampleSize = max (minSampleSizeTwoTailed alpha beta minDiff stdDev) 5
 
-testNormalDistribution :: (Erf a, Ord a, Integral b) => a -> a -> b -> a -> DistributionTestResult a
+testNormalDistribution :: (InvErf a, Ord a, Integral b) => a -> a -> b -> a -> DistributionTestResult a
 testNormalDistribution alpha stdDev count actualDiff =
-  if actualDiff > upperTest then res {dtrValue = TestGreater}
-  else if actualDiff < lowerTest then res {dtrValue = TestSmaller}
-       else res {dtrValue = TestSame}
+  if actualDiff > upperTest then res {dtrValue = TestPositive}
+  else if actualDiff < lowerTest then res {dtrValue = TestNegative}
+       else res {dtrValue = TestZero}
     where upperTest = (upperPerOfNormDist alpha) * stdDev / (sqrt $ fromIntegral count)
           lowerTest = upperTest * (-1)
           res = DistributionTestResult { dtrValue = undefined, dtrTestedMean = actualDiff, dtrStdDev = stdDev
                                        , dtrSampleSize = fromIntegral count, dtrUpperBound = upperTest
                                        , dtrLowerBound = lowerTest}
 
-minSampleSize :: (Erf a, InvErf a, RealFrac a, Integral b) => TestType -> a -> a -> a -> a -> b
+minSampleSize :: (InvErf a, RealFrac a, Integral b) => TestType -> a -> a -> a -> a -> b
 minSampleSize testType = if testType == OneTailed then minSampleSizeOneTailed else minSampleSizeTwoTailed
 
-minSampleSizeOneTailed :: (Erf a, InvErf a, RealFrac a, Integral b) => a -> a -> a -> a -> b
+minSampleSizeOneTailed :: (InvErf a, RealFrac a, Integral b) => a -> a -> a -> a -> b
 minSampleSizeOneTailed alpha beta minDiff stdDev = ceiling $ ((upperPerOfNormDist alpha) - (inverseCumDist (1-beta)) / (minDiff/stdDev))^2
 
-minSampleSizeTwoTailed :: (Erf a, InvErf a, RealFrac a, Integral b) => a -> a -> a -> a -> b
+minSampleSizeTwoTailed :: (InvErf a, RealFrac a, Integral b) => a -> a -> a -> a -> b
 minSampleSizeTwoTailed alpha = minSampleSizeOneTailed (alpha/2)
 
-upperPerOfNormDist :: (Erf a) => a -> a
-upperPerOfNormDist = normcdf
+upperPerOfNormDist :: (InvErf a) => a -> a
+upperPerOfNormDist = invnormcdf . (1 - )
 
 -- This is called the Probit and can be numerically approximated.
 inverseCumDist :: (InvErf a) => a -> a
@@ -159,7 +174,15 @@ data StreamStdDev a = StreamStdDev
     , ssdMean :: a
     , ssdS :: a
     }
-    deriving (Show)
+    deriving (Eq)
+
+instance (Show a, Floating a) => Show (StreamStdDev a) where
+  show ssd@(StreamStdDev count mean s) =
+    "StreamStdDev {ssdCount = " ++ (show count)
+    ++ ", ssdMean = " ++ (show mean)
+    ++ ", ssdStdDev = " ++ (show $ ssdStdDev ssd)
+    ++ ", ssdS = " ++ (show s)
+    ++ "}"
 
 ssdStdDev :: (Floating a) => StreamStdDev a -> a
 ssdStdDev ssd = sqrt ((ssdS ssd) / ((fromIntegral $ ssdCount ssd) - 1))
@@ -182,26 +205,6 @@ conduitSSD = do
       yield (initSSD first, first) 
       void $ CL.mapAccum updateSSDPair $ initSSD first
         where updateSSDPair a s = (updateSSD a s, (updateSSD a s, a))
-
-{-
-conduitSSD :: (Fractional a, Monad m) => Conduit a m (a, StreamStdDev a)
-conduitSSD = do
-  mNext <- await
-  case mNext of
-    Nothing -> return ()
-    Just n -> do
-      yield (n, initSSD n)
-      conduitSSD' (initSSD n)
-
-conduitSSD' :: (Fractional a, Monad m) => StreamStdDev a -> Conduit a m (a, StreamStdDev a)
-conduitSSD' ssd = do
-  mNext <- await
-  case mNext of
-    Nothing -> return ()
-    Just n -> do
-      yield (n, updateSSD n ssd)
-      conduitSSD' $ updateSSD n ssd
--}
 
 wilcoxonMatchedPairTest' :: TestType -> Double -> Sample -> Sample -> Maybe TestResult
 wilcoxonMatchedPairTest' test p smp1 smp2 =

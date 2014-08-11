@@ -32,6 +32,7 @@ Test-Suite probability-test-tests
     , log-domain == 0.9.*
     , mwc-random == 0.13.*
     , conduit == 1.1.*
+    , containers == 0.5.*
 
 library
   exposed-modules:     Test.ProbabilityCheck, Test.Tasty.ProbabilityCheck
@@ -48,5 +49,6 @@ library
     , approximate == 0.2.*
     , conduit == 1.1.*
     , erf == 2.0.*
+    , containers == 0.5.*
   hs-source-dirs:      src
   default-language:    Haskell2010

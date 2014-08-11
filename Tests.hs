@@ -3,22 +3,20 @@ module Main where
 import Test.ProbabilityCheck
 import Test.Tasty
 import Test.Tasty.HUnit
-import Test.Tasty.QuickCheck (testProperty)
 import Data.Approximate (Approximate (..))
-import Test.QuickCheck (choose, Gen, arbitrary, generate)
-import Test.QuickCheck.Property (failed, succeeded, Result(..))
-import Statistics.Test.Types (TestResult(..))
+import Test.QuickCheck (choose, Gen, arbitrary)
 import Numeric.Log
 import Data.Conduit (($$), Source)
 import qualified Data.Conduit.List as CL
 import System.Random.MWC (withSystemRandom)
 import System.Random.MWC.Distributions (normal)
+import Data.Map.Strict (insertWith)
 
 main :: IO ()
 main =
   defaultMain $
   testGroup "probability-test's Tests"
-  [ testGroup "Tests for Same Confidence Approximates"
+  [ {-testGroup "Tests for Same Confidence Approximates"
     [ testProperty "Correct Approximates claiming 100% accuracy never fails test." $ do
          testResult <- testSameConfidenceApproximates 0.05 $ genApproximate 1 1
          case testResult of
@@ -54,23 +52,36 @@ main =
     , testCase "Consistantly accurately confident Approximates shoudl pass a test." $
       ((Just NotSignificant) @=?) =<< (generate $ testApproximates 0.05 $ genVerriedApproximate 0)
     ]
-  , testGroup "Tests for testNormDistSink"
-    [ testCase "Passing simple case" $ assertResHasVal TestSame $ zeroSource $$ testNormDistSink 0.1 0.1 0.1
-    , testCase "Failing simple case" $ assertResHasVal TestGreater $ fiveOnehundrethSource $$ testNormDistSink 0.1 0.1 0.1
-      {-
+  , -}
+    testGroup "Tests for testNormDistSink"
+    [ testCase "Zero simple case" $ assertResHasVal TestZero $ zeroSource $$ testNormDistSink 0.05 0.05 0.05
+    , testCase "Positive simple case" $ assertResHasVal TestPositive $ fiveOnehundrethSource $$ testNormDistSink 0.05 0.05 0.05
+    , testCase "100 Samples null is true." $ do
+      lst <- sequence $ replicate 100 $ zeroSource $$ testNormDistSink 0.05 0.05 0.05
+      assertFailure (show $ foldl dtrFolder (initDTS $ head lst) $ tail lst)
+    , testCase "100 samples null is false." $ do
+      lst <- sequence $ replicate 100 $ fiveOnehundrethSource $$ testNormDistSink 0.05 0.05 0.05
+      assertFailure (show $ foldl dtrFolder (initDTS $ head lst) $ tail lst)
+    {-
     , testCase "Passing self test" $ assertResHasVal TestSame $
                ( (CL.unfoldM (\_ -> do
-                                 res <- zeroSource $$ testNormDistSink 0.1 0.1 0.5
-                                 return $ Just (if TestSame == dtrValue res then (0 :: Double) else 1, ())) ())
-                 $$ testNormDistSink 0.05 0.05 1)
+                                 res <- zeroSource $$ testNormDistSink 0.05 0.05 0.05
+                                 return $ Just (if TestSame == dtrValue res then ((-0.05) :: Double) else 0.95, ())) ())
+                 $$ testNormDistSink 0.05 0.05 0.01)
     , testCase "Failing self test" $ assertResHasVal TestSame $
                ( (CL.unfoldM (\_ -> do
-                                 res <- fiveOnehundrethSource $$ testNormDistSink 0.1 0.1 0.5
-                                 return $ Just (if TestGreater == dtrValue res then (0 :: Double) else 1, ())) ())
-                 $$ testNormDistSink 0.05 0.05 1)
--}
+                                 res <- fiveOnehundrethSource $$ testNormDistSink 0.05 0.05 0.05
+                                 return $ Just (if TestGreater == dtrValue res then (-0.05 :: Double) else 0.95, ())) ())
+                 $$ testNormDistSink 0.05 0.05 0.01)
+    -}
     ]
   ]
+
+
+dtrFolder :: (Fractional a) => DistributionTestSummary a -> DistributionTestResult a -> DistributionTestSummary a
+dtrFolder (DistributionTestSummary sVals sMeans sStdDevs sCounts sUppers sLowers)
+  (DistributionTestResult nVal nMean nStdDev nCount nUpper nLower) =
+  DistributionTestSummary (insertWith (+) nVal 1 sVals) (updateSSD nMean sMeans) (updateSSD nStdDev sStdDevs) (updateSSD (fromIntegral nCount) sCounts) (updateSSD nUpper sUppers) (updateSSD nLower sLowers)
 
 assertResHasVal :: DistributionTestValue -> IO (DistributionTestResult Double) -> Assertion
 assertResHasVal a bIO = do
@@ -91,7 +102,7 @@ zeroSource :: Source IO Double
 zeroSource = normalDoubleSource 0
 
 fiveOnehundrethSource :: Source IO Double
-fiveOnehundrethSource = normalDoubleSource 0.1
+fiveOnehundrethSource = normalDoubleSource 0.05
 
 genApproximate :: Log Double -> Double -> Gen (Approximate Integer, Integer)
 genApproximate assertedConf actualAccuracy = do
