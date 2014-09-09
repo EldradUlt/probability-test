@@ -54,13 +54,13 @@ main =
     ]
   , -}
     testGroup "Tests for testNormDistSink"
-    [ testCase "Zero simple case" $ assertResHasVal TestZero $ zeroSource $$ testNormDistSink 0.05 0.05 0.05
-    , testCase "Positive simple case" $ assertResHasVal TestPositive $ fiveOnehundrethSource $$ testNormDistSink 0.05 0.05 0.05
+    [ testCase "Zero simple case" $ assertResHasVal TestZero $ zeroSource $$ testNormDistSink 0.05 0.05 0.143885
+    , testCase "Positive simple case" $ assertResHasVal TestPositive $ fiveOnehundrethSource $$ testNormDistSink 0.05 0.05 0.143885
     , testCase "100 Samples null is true." $ do
-      lst <- sequence $ replicate 100 $ zeroSource $$ testNormDistSink 0.05 0.05 0.05
+      lst <- sequence $ replicate 100 $ zeroSource $$ testNormDistSink 0.05 0.05 0.143885
       assertFailure (show $ foldl dtrFolder (initDTS $ head lst) $ tail lst)
     , testCase "100 samples null is false." $ do
-      lst <- sequence $ replicate 100 $ fiveOnehundrethSource $$ testNormDistSink 0.05 0.05 0.05
+      lst <- sequence $ replicate 100 $ fiveOnehundrethSource $$ testNormDistSink 0.05 0.05 0.07194244604317
       assertFailure (show $ foldl dtrFolder (initDTS $ head lst) $ tail lst)
     {-
     , testCase "Passing self test" $ assertResHasVal TestSame $
@@ -102,7 +102,7 @@ zeroSource :: Source IO Double
 zeroSource = normalDoubleSource 0
 
 fiveOnehundrethSource :: Source IO Double
-fiveOnehundrethSource = normalDoubleSource 0.05
+fiveOnehundrethSource = normalDoubleSource 0.143885
 
 genApproximate :: Log Double -> Double -> Gen (Approximate Integer, Integer)
 genApproximate assertedConf actualAccuracy = do

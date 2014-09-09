@@ -141,6 +141,10 @@ testNormDistSink' alpha beta minDiff ssd = do
               count = ssdCount newSSD
               mean = ssdMean newSSD
               minSampleSize = max (minSampleSizeTwoTailed alpha beta minDiff stdDev) 5
+                              -- Having minSampleSize >=5 is just a
+                              -- place holder for accurately
+                              -- accounting for estimation of the
+                              -- varriance.
 
 testNormalDistribution :: (InvErf a, Ord a, Integral b) => a -> a -> b -> a -> DistributionTestResult a
 testNormalDistribution alpha stdDev count actualDiff =
@@ -157,7 +161,8 @@ minSampleSize :: (InvErf a, RealFrac a, Integral b) => TestType -> a -> a -> a -
 minSampleSize testType = if testType == OneTailed then minSampleSizeOneTailed else minSampleSizeTwoTailed
 
 minSampleSizeOneTailed :: (InvErf a, RealFrac a, Integral b) => a -> a -> a -> a -> b
-minSampleSizeOneTailed alpha beta minDiff stdDev = ceiling $ ((upperPerOfNormDist alpha) - (inverseCumDist (1-beta)) / (minDiff/stdDev))^2
+--minSampleSizeOneTailed alpha beta minDiff stdDev = ceiling $ (((upperPerOfNormDist alpha) - (inverseCumDist (1-beta))) / (minDiff/stdDev))^2
+minSampleSizeOneTailed alpha beta minDiff stdDev = ceiling $ ((upperPerOfNormDist alpha) / (minDiff/stdDev))^2
 
 minSampleSizeTwoTailed :: (InvErf a, RealFrac a, Integral b) => a -> a -> a -> a -> b
 minSampleSizeTwoTailed alpha = minSampleSizeOneTailed (alpha/2)
