@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                probability-test
-version:             0.1.0.0
+version:             0.2.0.0
 -- synopsis:            
 -- description:         
 license:             BSD3
@@ -35,9 +35,10 @@ Test-Suite probability-test-tests
     , containers == 0.5.*
 
 library
-  exposed-modules:     Test.ProbabilityCheck, Test.Tasty.ProbabilityCheck
+  exposed-modules:     Test.ProbabilityCheck
   -- other-modules:       
   other-extensions:    MultiParamTypeClasses, FlexibleInstances
+  Ghc-Options: -Wall -threaded -rtsopts
   build-depends:
       base >=4.6 && <4.7
     , QuickCheck >=2.7 && <2.8
