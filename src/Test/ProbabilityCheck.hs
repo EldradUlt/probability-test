@@ -7,11 +7,12 @@ module Test.ProbabilityCheck
        ) where
 
 import Statistics.Test.Types (TestType(..))
-import Data.Conduit (Sink, Conduit, await, yield)
+import Data.Conduit (Sink, Conduit, await, yield, awaitForever, (=$=))
 import qualified Data.Conduit.List as CL
 import Data.Number.Erf (invnormcdf, InvErf)
 import Control.Monad (void)
 import Data.Map.Strict (Map, singleton)
+import Data.List (insert, groupBy)
 
 -- This probably wants better naming at some point.
 data DistributionTestResult a = DistributionTestResult
@@ -132,4 +133,26 @@ conduitSSD = do
       yield (initSSD first, first) 
       void $ CL.mapAccum updateSSDPair $ initSSD first
         where updateSSDPair a s = (updateSSD a s, (updateSSD a s, a))
+
+wilcoxonRankedPairsConduit :: (InvErf a, RealFrac a, Ord a, Monad m) => Conduit (a,a) m a
+wilcoxonRankedPairsConduit = (CL.map $ uncurry (-)) =$= wilcoxonRankedConduit' []
+
+wilcoxonRankedConduit' :: (Num a, InvErf a, RealFrac a, Ord a, Monad m) => [(a,a)] -> Conduit a m a
+wilcoxonRankedConduit' lst =
+  awaitForever go
+  where go diff = do
+          yield testValue
+          wilcoxonRankedConduit' nLst
+            where z = signum diff
+                  a = abs diff
+                  nLst = insert (a, z) lst
+                  n = fromIntegral $ length nLst
+                  rankedLst = assignRanks 0 $ groupBy (\p1 p2 -> (fst p1) == (fst p2)) nLst
+                  assignRanks _ [] = []
+                  assignRanks cnt (r:rest) = (map (\(_, zi) -> zi * (2*cnt+1+(fromIntegral $ length r)) / 2) r) ++ (assignRanks (cnt+1) rest)
+                  pPos = (fromIntegral (length $ filter ((1==) . snd) nLst)) / n
+                  pNeg = (fromIntegral (length $ filter (((-1)==) . snd) nLst)) / n
+                  t = sum rankedLst
+                  testValue = t / (sqrt $ ((2*n*(n+1)*(2*n+1)) / 3) * (pPos + pNeg - ((pPos - pNeg)^(2::Integer))))
+
 
