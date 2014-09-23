@@ -2,12 +2,13 @@
 
 module Test.ProbabilityCheck
        ( testNormDistSink
+       , wilcoxonSink
        , DistributionTestResult(..), DistributionTestValue(..), DistributionTestSummary(..), initDTS
        , updateSSD, conduitSSD
        ) where
 
 import Statistics.Test.Types (TestType(..))
-import Data.Conduit (Sink, Conduit, await, yield, awaitForever, (=$=))
+import Data.Conduit (Sink, Conduit, await, yield, awaitForever, (=$=), (=$))
 import qualified Data.Conduit.List as CL
 import Data.Number.Erf (invnormcdf, InvErf)
 import Control.Monad (void)
@@ -134,10 +135,15 @@ conduitSSD = do
       void $ CL.mapAccum updateSSDPair $ initSSD first
         where updateSSDPair a s = (updateSSD a s, (updateSSD a s, a))
 
+wilcoxonSink :: (InvErf a, RealFrac a, Ord a, Monad m) => a -> a -> Sink (a,a) m (DistributionTestResult a)
+wilcoxonSink alpha minDiff = do
+  CL.drop 20
+  wilcoxonRankedPairsConduit =$ (testNormDistSink alpha minDiff)
+
 wilcoxonRankedPairsConduit :: (InvErf a, RealFrac a, Ord a, Monad m) => Conduit (a,a) m a
 wilcoxonRankedPairsConduit = (CL.map $ uncurry (-)) =$= wilcoxonRankedConduit' []
 
-wilcoxonRankedConduit' :: (Num a, InvErf a, RealFrac a, Ord a, Monad m) => [(a,a)] -> Conduit a m a
+wilcoxonRankedConduit' :: (InvErf a, RealFrac a, Ord a, Monad m) => [(a,a)] -> Conduit a m a
 wilcoxonRankedConduit' lst =
   awaitForever go
   where go diff = do
