@@ -2,7 +2,7 @@
 
 module Test.ProbabilityCheck
        ( testNormDistSink
-       , wilcoxonSink
+       , wilcoxonSink, wilcoxonRankedPairsConduit
        , DistributionTestResult(..), DistributionTestValue(..), DistributionTestSummary(..), initDTS
        , updateSSD, conduitSSD
        ) where
@@ -14,6 +14,7 @@ import Data.Number.Erf (invnormcdf, InvErf)
 import Control.Monad (void)
 import Data.Map.Strict (Map, singleton)
 import Data.List (insert, groupBy)
+import Control.Applicative ((*>))
 
 -- This probably wants better naming at some point.
 data DistributionTestResult a = DistributionTestResult
@@ -88,8 +89,9 @@ testNormalDistribution alpha stdDev count actualDiff =
 minSampleSize :: (InvErf a, RealFrac a, Integral b) => TestType -> a -> a -> a -> b
 minSampleSize testType = if testType == OneTailed then minSampleSizeOneTailed else minSampleSizeTwoTailed
 
+-- Putting a hard limit of 20 here is just temporary to work around inaccuracy of estimating the 
 minSampleSizeOneTailed :: (InvErf a, RealFrac a, Integral b) => a -> a -> a -> b
-minSampleSizeOneTailed alpha minDiff stdDev = ceiling $ ((upperPerOfNormDist alpha) / (minDiff/stdDev))^(2::Integer)
+minSampleSizeOneTailed alpha minDiff stdDev = max 2000 $ ceiling $ ((upperPerOfNormDist alpha) / (minDiff/stdDev))^(2::Integer)
 
 minSampleSizeTwoTailed :: (InvErf a, RealFrac a, Integral b) => a -> a -> a -> b
 minSampleSizeTwoTailed alpha = minSampleSizeOneTailed (alpha/2)
@@ -136,9 +138,7 @@ conduitSSD = do
         where updateSSDPair a s = (updateSSD a s, (updateSSD a s, a))
 
 wilcoxonSink :: (InvErf a, RealFrac a, Ord a, Monad m) => a -> a -> Sink (a,a) m (DistributionTestResult a)
-wilcoxonSink alpha minDiff = do
-  CL.drop 20
-  wilcoxonRankedPairsConduit =$ (testNormDistSink alpha minDiff)
+wilcoxonSink alpha minDiff = wilcoxonRankedPairsConduit =$ CL.drop 200 *> testNormDistSink alpha minDiff
 
 wilcoxonRankedPairsConduit :: (InvErf a, RealFrac a, Ord a, Monad m) => Conduit (a,a) m a
 wilcoxonRankedPairsConduit = (CL.map $ uncurry (-)) =$= wilcoxonRankedConduit' []

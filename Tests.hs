@@ -33,9 +33,15 @@ main =
            then return ()
            else assertFailure (show dts)
     ]
-  , -}testGroup "tests for wilcoxonSink"
-    [ testCase "Simple valid null hypothesis." $ assertResHasVal TestZero $ tupleSource 0 0 $$ wilcoxonSink 0.05 0.1
-    , testCase "Simple invalid null hypothesis." $ assertResHasVal TestPositive $ tupleSource 0 0.1 $$ wilcoxonSink 0.05 0.1
+  , -}testGroup "Tests for wilcoxon"
+    [ testCase "Simple valid null hypothesis." $ {-do
+         res <- tupleSource 0 0 $$ wilcoxonSink 0.01 0.05
+         assertFailure $ show res-}
+      assertResHasVal TestZero $ tupleSource 0 0 $$ wilcoxonSink 0.01 0.05
+    , testCase "Simple invalid null hypothesis." $ {-do
+         res <- tupleSource 0 0.1 $$ wilcoxonSink 0.01 0.05
+         assertFailure $ show res-}
+      assertResHasVal TestPositive $ tupleSource 0 0.1 $$ wilcoxonSink 0.01 0.05
     ]
   ]
 
