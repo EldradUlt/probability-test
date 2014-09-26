@@ -8,12 +8,12 @@ module Test.ProbabilityCheck
        ) where
 
 import Statistics.Test.Types (TestType(..))
-import Data.Conduit (Sink, Conduit, await, yield, awaitForever, (=$=), (=$))
+import Data.Conduit (Sink, Conduit, await, yield, (=$=), (=$))
 import qualified Data.Conduit.List as CL
 import Data.Number.Erf (invnormcdf, InvErf)
 import Control.Monad (void)
 import Data.Map.Strict (Map, singleton)
-import Data.List (insert, groupBy)
+import Data.List (sort, groupBy)
 import Control.Applicative ((*>))
 
 -- This probably wants better naming at some point.
@@ -91,7 +91,7 @@ minSampleSize testType = if testType == OneTailed then minSampleSizeOneTailed el
 
 -- Putting a hard limit of 20 here is just temporary to work around inaccuracy of estimating the 
 minSampleSizeOneTailed :: (InvErf a, RealFrac a, Integral b) => a -> a -> a -> b
-minSampleSizeOneTailed alpha minDiff stdDev = max 2000 $ ceiling $ ((upperPerOfNormDist alpha) / (minDiff/stdDev))^(2::Integer)
+minSampleSizeOneTailed alpha minDiff stdDev = max 20 $ ceiling $ ((upperPerOfNormDist alpha) / (minDiff/stdDev))^(2::Integer)
 
 minSampleSizeTwoTailed :: (InvErf a, RealFrac a, Integral b) => a -> a -> a -> b
 minSampleSizeTwoTailed alpha = minSampleSizeOneTailed (alpha/2)
@@ -141,24 +141,25 @@ wilcoxonSink :: (InvErf a, RealFrac a, Ord a, Monad m) => a -> a -> Sink (a,a) m
 wilcoxonSink alpha minDiff = wilcoxonRankedPairsConduit =$ CL.drop 200 *> testNormDistSink alpha minDiff
 
 wilcoxonRankedPairsConduit :: (InvErf a, RealFrac a, Ord a, Monad m) => Conduit (a,a) m a
-wilcoxonRankedPairsConduit = (CL.map $ uncurry (-)) =$= wilcoxonRankedConduit' []
+wilcoxonRankedPairsConduit = (CL.map $ uncurry (-)) =$= wilcoxonRankedConduit' 40
 
-wilcoxonRankedConduit' :: (InvErf a, RealFrac a, Ord a, Monad m) => [(a,a)] -> Conduit a m a
-wilcoxonRankedConduit' lst =
-  awaitForever go
-  where go diff = do
-          yield testValue
-          wilcoxonRankedConduit' nLst
-            where z = signum diff
-                  a = abs diff
-                  nLst = insert (a, z) lst
-                  n = fromIntegral $ length nLst
-                  rankedLst = assignRanks 0 $ groupBy (\p1 p2 -> (fst p1) == (fst p2)) nLst
-                  assignRanks _ [] = []
-                  assignRanks cnt (r:rest) = (map (\(_, zi) -> zi * (2*cnt+1+(fromIntegral $ length r)) / 2) r) ++ (assignRanks (cnt+1) rest)
-                  pPos = (fromIntegral (length $ filter ((1==) . snd) nLst)) / n
-                  pNeg = (fromIntegral (length $ filter (((-1)==) . snd) nLst)) / n
-                  t = sum rankedLst
-                  testValue = t / (sqrt $ ((2*n*(n+1)*(2*n+1)) / 3) * (pPos + pNeg - ((pPos - pNeg)^(2::Integer))))
+-- This probably doesn't handle a
+wilcoxonRankedConduit' :: (InvErf a, RealFrac a, Ord a, Monad m) => Int -> Conduit a m a
+wilcoxonRankedConduit' size = do
+  lst <- CL.take size
+  if length lst == size then 
+    let pLst = sort $  map (\a -> (abs a, signum a)) lst
+        n = fromIntegral $ length pLst
+        rankedLst = assignRanks 0 $ groupBy (\p1 p2 -> (fst p1) == (fst p2)) pLst
+        assignRanks _ [] = []
+        assignRanks cnt (r:rest) = (map (\(_, zi) -> zi * (2*cnt+1+(fromIntegral $ length r)) / 2) r) ++ (assignRanks (cnt+1) rest)
+        pPos = (fromIntegral (length $ filter ((1==) . snd) pLst)) / n
+        pNeg = (fromIntegral (length $ filter (((-1)==) . snd) pLst)) / n
+        t = sum rankedLst
+        testValue = t / (sqrt $ ((2*n*(n+1)*(2*n+1)) / 3) * (pPos + pNeg - ((pPos - pNeg)^(2::Integer))))
+    in do
+      yield testValue
+      wilcoxonRankedConduit' size
+    else return ()
 
 

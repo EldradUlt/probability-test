@@ -37,11 +37,11 @@ main =
     [ testCase "Simple valid null hypothesis." $ {-do
          res <- tupleSource 0 0 $$ wilcoxonSink 0.01 0.05
          assertFailure $ show res-}
-      assertResHasVal TestZero $ tupleSource 0 0 $$ wilcoxonSink 0.01 0.05
+      assertResHasVal TestZero $ tupleSource 0 0 $$ wilcoxonSink 0.05 0.05
     , testCase "Simple invalid null hypothesis." $ {-do
          res <- tupleSource 0 0.1 $$ wilcoxonSink 0.01 0.05
          assertFailure $ show res-}
-      assertResHasVal TestPositive $ tupleSource 0 0.1 $$ wilcoxonSink 0.01 0.05
+      assertResHasVal TestPositive $ tupleSource 0 0.1 $$ wilcoxonSink 0.05 0.05
     ]
   ]
 
