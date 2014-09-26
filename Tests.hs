@@ -14,7 +14,7 @@ main :: IO ()
 main =
   defaultMain $
   testGroup "probability-test's Tests"
-  [ {-testGroup "Tests for testNormDistSink"
+  [ testGroup "Tests for testNormDistSink"
     [ testCase "Zero simple case" $ assertResHasVal TestZero $ zeroSource $$ testNormDistSink 0.05 0.05
     , testCase "Positive simple case" $ assertResHasVal TestPositive $ oneTenthSource $$ testNormDistSink 0.05 0.05
     , testCase "100 Samples null is true." $ do
@@ -33,7 +33,7 @@ main =
            then return ()
            else assertFailure (show dts)
     ]
-  , -}testGroup "Tests for wilcoxon"
+  , testGroup "Tests for wilcoxon"
     [ testCase "Simple valid null hypothesis." $ {-do
          res <- tupleSource 0 0 $$ wilcoxonSink 0.01 0.05
          assertFailure $ show res-}
@@ -41,7 +41,7 @@ main =
     , testCase "Simple invalid null hypothesis." $ {-do
          res <- tupleSource 0 0.1 $$ wilcoxonSink 0.01 0.05
          assertFailure $ show res-}
-      assertResHasVal TestPositive $ tupleSource 0 0.1 $$ wilcoxonSink 0.05 0.05
+      assertResHasVal TestNegative $ tupleSource 0 0.1 $$ wilcoxonSink 0.05 0.05
     ]
   ]
 
