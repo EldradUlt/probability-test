@@ -1,3 +1,4 @@
+{-# LANGUAGE TemplateHaskell #-}
 module Main where
 
 import Test.ProbabilityCheck
@@ -9,6 +10,9 @@ import System.Random.MWC (withSystemRandom)
 import System.Random.MWC.Distributions (normal)
 import Data.Map.Strict (insertWith, (!))
 import Control.Applicative ((<*>))
+import qualified Data.HyperLogLog as HLL
+import Data.Reflection (nat)
+import Data.Approximate (Approximate(..))
 
 main :: IO ()
 main =
@@ -42,8 +46,17 @@ main =
          res <- tupleSource 0 0.1 $$ wilcoxonSink 0.01 0.05
          assertFailure $ show res-}
       assertResHasVal TestNegative $ tupleSource 0 0.1 $$ wilcoxonSink 0.05 0.05
+    , testCase "Catching HLL error." $ assertResHasVal TestNegative
+      $ (CL.sourceList $ sequence $ repeat genHLLActualApprox)
+      =$ CL.map (\(actual, (Approximate conf lo _ hi)) -> (conf, if lo <= actual && actual <= hi then 1 else 0))
+      $$ wilcoxonSink 0.05 0.05
     ]
   ]
+
+genHLLActualApprox :: (Num a) => Gen (a, HLL.HyperLogLog ($nat 5))
+genHLLActualApprox = do
+  lst <- arbitrary :: [Integer]
+  return (length $ nub lst, foldl (flip HLL.insert) mempty lst
 
 dtrFolder :: (Fractional a) => DistributionTestSummary a -> DistributionTestResult a -> DistributionTestSummary a
 dtrFolder (DistributionTestSummary sVals sMeans sStdDevs sCounts sUppers sLowers)

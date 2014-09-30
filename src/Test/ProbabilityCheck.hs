@@ -14,7 +14,6 @@ import Data.Number.Erf (invnormcdf, InvErf)
 import Control.Monad (void)
 import Data.Map.Strict (Map, singleton)
 import Data.List (sort, groupBy)
-import Control.Applicative ((*>))
 
 -- This probably wants better naming at some point.
 data DistributionTestResult a = DistributionTestResult
@@ -138,12 +137,11 @@ conduitSSD = do
         where updateSSDPair a s = (updateSSD a s, (updateSSD a s, a))
 
 wilcoxonSink :: (InvErf a, RealFrac a, Ord a, Monad m) => a -> a -> Sink (a,a) m (DistributionTestResult a)
-wilcoxonSink alpha minDiff = wilcoxonRankedPairsConduit =$ CL.drop 200 *> testNormDistSink alpha minDiff
+wilcoxonSink alpha minDiff = wilcoxonRankedPairsConduit =$ testNormDistSink alpha minDiff
 
 wilcoxonRankedPairsConduit :: (InvErf a, RealFrac a, Ord a, Monad m) => Conduit (a,a) m a
 wilcoxonRankedPairsConduit = (CL.map $ uncurry (-)) =$= wilcoxonRankedConduit' 40
 
--- This probably doesn't handle a
 wilcoxonRankedConduit' :: (InvErf a, RealFrac a, Ord a, Monad m) => Int -> Conduit a m a
 wilcoxonRankedConduit' size = do
   lst <- CL.take size

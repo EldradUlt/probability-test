@@ -26,18 +26,19 @@ Test-Suite probability-test-tests
     , QuickCheck >=2.7 && <2.8
     , statistics >=0.11 && <0.12
     , tasty-hunit >=0.8 && <0.9
-    , tasty >=0.8 && <0.9
+    , tasty
     , approximate == 0.2.*
     , tasty-quickcheck == 0.8.*
     , log-domain == 0.9.*
     , mwc-random == 0.13.*
     , conduit == 1.1.*
     , containers == 0.5.*
+    , hyperloglog == 0.2.3
 
 library
   exposed-modules:     Test.ProbabilityCheck
   -- other-modules:       
-  other-extensions:    MultiParamTypeClasses, FlexibleInstances
+  other-extensions:    MultiParamTypeClasses, FlexibleInstances, RoleAnnotations
   Ghc-Options: -Wall -threaded -rtsopts
   build-depends:
       base >=4.6 && <4.7
@@ -45,7 +46,7 @@ library
     , vector >=0.10 && <0.11
     , statistics >=0.11 && <0.12
     , tasty-hunit >=0.8 && <0.9
-    , tasty >=0.8 && <0.9
+    , tasty
     , math-functions == 0.1.5.*
     , approximate == 0.2.*
     , conduit == 1.1.*
