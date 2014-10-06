@@ -1,10 +1,10 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, DataKinds #-}
 module Main where
 
 import Test.ProbabilityCheck
 import Test.Tasty
 import Test.Tasty.HUnit
-import Data.Conduit (($$), Source, ZipSource(..), ($=))
+import Data.Conduit (($$), Source, ZipSource(..), ($=), (=$))
 import qualified Data.Conduit.List as CL
 import System.Random.MWC (withSystemRandom)
 import System.Random.MWC.Distributions (normal)
@@ -13,6 +13,9 @@ import Control.Applicative ((<*>))
 import qualified Data.HyperLogLog as HLL
 import Data.Reflection (nat)
 import Data.Approximate (Approximate(..))
+import Data.List (nub)
+import Test.QuickCheck (Gen, arbitrary, generate)
+import Data.Monoid (mempty)
 
 main :: IO ()
 main =
@@ -47,23 +50,27 @@ main =
          assertFailure $ show res-}
       assertResHasVal TestNegative $ tupleSource 0 0.1 $$ wilcoxonSink 0.05 0.05
     , testCase "Catching HLL error." $ assertResHasVal TestNegative
-      $ (CL.sourceList $ sequence $ repeat genHLLActualApprox)
-      =$ CL.map (\(actual, (Approximate conf lo _ hi)) -> (conf, if lo <= actual && actual <= hi then 1 else 0))
+      $ (CL.unfoldM (\_ -> do
+                        pair <- generate genHLLActualApprox
+                        return $ Just (pair, ())) ())
+      =$ CL.map (\(actual, hll) -> 
+                  let (Approximate conf lo _ hi) = HLL.size hll
+                  in (conf, if lo <= actual && actual <= hi then 1 else 0))
       $$ wilcoxonSink 0.05 0.05
     ]
   ]
 
-genHLLActualApprox :: (Num a) => Gen (a, HLL.HyperLogLog ($nat 5))
+genHLLActualApprox :: (Num a) => Gen (a, HLL.HyperLogLog $(nat 5))
 genHLLActualApprox = do
   lst <- arbitrary :: [Integer]
-  return (length $ nub lst, foldl (flip HLL.insert) mempty lst
+  return (length $ nub lst, foldl (flip HLL.insert) mempty lst)
 
 dtrFolder :: (Fractional a) => DistributionTestSummary a -> DistributionTestResult a -> DistributionTestSummary a
 dtrFolder (DistributionTestSummary sVals sMeans sStdDevs sCounts sUppers sLowers)
   (DistributionTestResult nVal nMean nStdDev nCount nUpper nLower) =
   DistributionTestSummary (insertWith (+) nVal 1 sVals) (updateSSD nMean sMeans) (updateSSD nStdDev sStdDevs) (updateSSD (fromIntegral nCount) sCounts) (updateSSD nUpper sUppers) (updateSSD nLower sLowers)
 
-assertResHasVal :: DistributionTestValue -> IO (DistributionTestResult Double) -> Assertion
+assertResHasVal :: DistributionTestValue -> IO (DistributionTestResult n) -> Assertion
 assertResHasVal a bIO = do
   b <- bIO
   if a == dtrValue b

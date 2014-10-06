@@ -33,12 +33,13 @@ Test-Suite probability-test-tests
     , mwc-random == 0.13.*
     , conduit == 1.1.*
     , containers == 0.5.*
-    , hyperloglog == 0.2.3
+    , hyperloglog == 0.2.3.2
+    , reflection == 1.5.*
 
 library
   exposed-modules:     Test.ProbabilityCheck
   -- other-modules:       
-  other-extensions:    MultiParamTypeClasses, FlexibleInstances, RoleAnnotations
+  other-extensions:    MultiParamTypeClasses, FlexibleInstances
   Ghc-Options: -Wall -threaded -rtsopts
   build-depends:
       base >=4.6 && <4.7
