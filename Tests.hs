@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, DataKinds #-}
+{-# LANGUAGE TemplateHaskell, DataKinds, ScopedTypeVariables #-}
 module Main where
 
 import Test.ProbabilityCheck
@@ -16,6 +16,8 @@ import Data.Approximate (Approximate(..))
 import Data.List (nub)
 import Test.QuickCheck (Gen, arbitrary, generate)
 import Data.Monoid (mempty)
+import Numeric.Log (Log(..), Precise)
+import Data.Number.Erf (InvErf(..))
 
 main :: IO ()
 main =
@@ -60,17 +62,26 @@ main =
     ]
   ]
 
+-- This wants to be replaced with a more accurate instance.
+instance (InvErf a, Precise a, RealFloat a) => InvErf (Log a) where
+  invnormcdf l = realToFrac $ invnormcdf (realToFrac l::a)
+
+-- This wants to be replaced with a more accurate instance.
+instance (RealFrac a, Precise a, RealFloat a) => RealFrac (Log a) where
+  properFraction l = (\(b,a) -> (b, realToFrac a)) $ properFraction $ exp (ln l)
+
+
 genHLLActualApprox :: (Num a) => Gen (a, HLL.HyperLogLog $(nat 5))
 genHLLActualApprox = do
-  lst <- arbitrary :: [Integer]
-  return (length $ nub lst, foldl (flip HLL.insert) mempty lst)
+  lst <- arbitrary :: Gen [Integer]
+  return (fromIntegral $ length $ nub lst, foldl (flip HLL.insert) mempty lst)
 
 dtrFolder :: (Fractional a) => DistributionTestSummary a -> DistributionTestResult a -> DistributionTestSummary a
 dtrFolder (DistributionTestSummary sVals sMeans sStdDevs sCounts sUppers sLowers)
   (DistributionTestResult nVal nMean nStdDev nCount nUpper nLower) =
   DistributionTestSummary (insertWith (+) nVal 1 sVals) (updateSSD nMean sMeans) (updateSSD nStdDev sStdDevs) (updateSSD (fromIntegral nCount) sCounts) (updateSSD nUpper sUppers) (updateSSD nLower sLowers)
 
-assertResHasVal :: DistributionTestValue -> IO (DistributionTestResult n) -> Assertion
+assertResHasVal :: (Show n) => DistributionTestValue -> IO (DistributionTestResult n) -> Assertion
 assertResHasVal a bIO = do
   b <- bIO
   if a == dtrValue b

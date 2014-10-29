@@ -32,6 +32,7 @@ Test-Suite probability-test-tests
     , log-domain == 0.9.*
     , mwc-random == 0.13.*
     , conduit == 1.1.*
+    , erf == 2.0.*
     , containers == 0.5.*
     , hyperloglog == 0.2.3.2
     , reflection == 1.5.*
