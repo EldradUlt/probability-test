@@ -148,14 +148,14 @@ updateSSD x (StreamStdDev prevC prevM prevS) = StreamStdDev {ssdCount = newC, ss
           newM = prevM + (x-prevM)/(fromIntegral newC)
           newS = prevS + (x-prevM)*(x-newM)
 
-conduitSSD :: (Fractional a, Monad m) => Conduit a m (StreamStdDev a, a)
+conduitSSD :: (Fractional a, Monad m) => Conduit a m (StreamStdDev a)
 conduitSSD = do
   mFirst <- await
   case mFirst of
     Nothing -> return ()
     Just first -> do
-      yield (initSSD first, first) 
-      void $ CL.mapAccum updateSSDPair $ initSSD first
+      yield (initSSD first)
+      void (CL.mapAccum updateSSDPair $ initSSD first) =$= CL.map fst
         where updateSSDPair a s = (updateSSD a s, (updateSSD a s, a))
 
 wilcoxonSink :: (InvErf a, RealFrac a, Ord a, Monad m) => a -> a -> Sink (a,a) m (DistributionTestResult a)
