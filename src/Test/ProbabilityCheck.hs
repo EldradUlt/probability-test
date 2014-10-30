@@ -14,6 +14,8 @@ import Data.Number.Erf (invnormcdf, InvErf)
 import Control.Monad (void)
 import Data.Map.Strict (Map, singleton)
 import Data.List (sort, groupBy)
+import Control.Monad.IO.Class (MonadIO(..))
+import Data.Time (getCurrentTime, UTCTime)
 
 -- This probably wants better naming at some point.
 data DistributionTestResult a = DistributionTestResult
@@ -45,12 +47,13 @@ initDTS :: (Num a) => DistributionTestResult a -> DistributionTestSummary a
 initDTS (DistributionTestResult val mean stddev size upper lower) = 
   DistributionTestSummary (singleton val 1) (initSSD mean) (initSSD stddev) (initSSD $ fromIntegral size) (initSSD upper) (initSSD lower)
 
--- A reasonable sample size to use for a desired Type I error rate,
--- Type II error rate, minimum meaningful difference, and the standard
--- deviation. For a OneTailed test between two normal distributions
--- where the test passes/fails based on whether the sample average is
--- greater than Za*stdDev/sqrt(sampleSize) where Za is the upper a
--- percentage point of the standard normal distribution.
+printTestInfo :: (InvErf a, RealFrac a, MonadIO m) => a -> a -> Conduit (StreamStdDev a) m (StreamStdDev a)
+printTestInfo alpha minDiff = do
+  now <- liftIO getCurrentTime
+  printTestInfo' alpha minDiff 0 now
+
+printTestInfo' :: (InvErf a, RealFrac a, MonadIO m) => a -> a -> Integer -> UTCTime -> Conduit (StreamStdDev a) m (StreamStdDev a)
+printTestInfo' alpha minDiff cntDwn ts = undefined
 
 testNormDistSink :: (InvErf a, RealFrac a, Ord a, Monad m) => a -> a -> Sink a m (DistributionTestResult a)
 testNormDistSink alpha minDiff = ssdConduit =$ (testNormDistSink' alpha minDiff)
