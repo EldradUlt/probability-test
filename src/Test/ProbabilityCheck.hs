@@ -4,7 +4,7 @@ module Test.ProbabilityCheck
        ( testNormDistSink
        , wilcoxonSink, wilcoxonRankedPairsConduit
        , DistributionTestResult(..), DistributionTestValue(..), DistributionTestSummary(..), initDTS
-       , updateSSD, conduitSSD
+       , updateSSD, ssdConduit
        ) where
 
 import Statistics.Test.Types (TestType(..))
@@ -41,11 +41,6 @@ data DistributionTestSummary a = DistributionTestSummary
                                  , dtsLowerBounds :: StreamStdDev a
                                  } deriving (Show, Eq)
 
-data DistributionTestInterim a = DistributionTestInterim
-                               { dtiSSD :: StreamStdDev a
-                               , dtiMinSamp :: Integer
-                               } deriving (Show, Eq)
-
 initDTS :: (Num a) => DistributionTestResult a -> DistributionTestSummary a
 initDTS (DistributionTestResult val mean stddev size upper lower) = 
   DistributionTestSummary (singleton val 1) (initSSD mean) (initSSD stddev) (initSSD $ fromIntegral size) (initSSD upper) (initSSD lower)
@@ -57,44 +52,24 @@ initDTS (DistributionTestResult val mean stddev size upper lower) =
 -- greater than Za*stdDev/sqrt(sampleSize) where Za is the upper a
 -- percentage point of the standard normal distribution.
 
-testNormDistConduit :: (InvErf a, RealFrac a, Ord a, Monad m) => a -> a -> Conduit a m (DistributionTestInterim a)
-testNormDistConduit alpha minDiff = do
-  mNext <- await
-  case mNext of
-    Nothing -> undefined
-    Just n -> testNormDistConduit' alpha minDiff $ initSSD n
-
-testNormDistConduit' :: (InvErf a, RealFrac a, Ord a, Monad m) => a -> a -> StreamStdDev a -> Conduit a m (DistributionTestInterim a)
-testNormDistConduit' alpha minDiff ssd = do
-  mNext <- await
-  case mNext of
-    Nothing -> return ()
-    Just next -> do
-      yield $ DistributionTestInterim newSSD $ minSampleSize TwoTailed alpha minDiff $ ssdStdDev newSSD
-      testNormDistConduit' alpha minDiff newSSD
-        where newSSD = updateSSD next ssd
-
 testNormDistSink :: (InvErf a, RealFrac a, Ord a, Monad m) => a -> a -> Sink a m (DistributionTestResult a)
-testNormDistSink alpha minDiff = do
-  mNext <- await
-  case mNext of
-    Nothing -> return $ DistributionTestResult TestInsufficientSample 0 0 0 0 0
-    Just n -> testNormDistSink' alpha minDiff $ initSSD n
+testNormDistSink alpha minDiff = ssdConduit =$ (testNormDistSink' alpha minDiff)
 
-testNormDistSink' :: (InvErf a, RealFrac a, Ord a, Monad m) => a -> a -> StreamStdDev a -> Sink a m (DistributionTestResult a)
-testNormDistSink' alpha minDiff ssd = do
+testNormDistSink' :: (InvErf a, RealFrac a, Ord a, Monad m) => a -> a -> Sink (StreamStdDev a) m (DistributionTestResult a)
+testNormDistSink' alpha minDiff = do
   mNext <- await
   case mNext of
     Nothing -> return $ DistributionTestResult
-               { dtrValue = TestInsufficientSample, dtrTestedMean = ssdMean ssd, dtrStdDev = ssdStdDev ssd
-               , dtrSampleSize = ssdCount ssd, dtrUpperBound = 0, dtrLowerBound = 0}
-    Just next -> if minSampleSize TwoTailed alpha minDiff stdDev <= count
-                 then return $ testNormalDistribution alpha stdDev count mean
-                 else testNormDistSink' alpha minDiff newSSD
-        where newSSD = updateSSD next ssd
-              stdDev = ssdStdDev newSSD
-              count = ssdCount newSSD
-              mean = ssdMean newSSD
+               -- These SSD values are a lie but I don't want to keep
+               -- the previous ssd around just for that. Probably will
+               -- eventually or will peek at the next.
+               { dtrValue = TestInsufficientSample, dtrTestedMean = 0, dtrStdDev = 0
+               , dtrSampleSize = 0, dtrUpperBound = 0, dtrLowerBound = 0}
+    Just ssd -> if minSampleSize TwoTailed alpha minDiff stdDev <= count
+                then return $ testNormalDistribution alpha stdDev count $ ssdMean ssd
+                else testNormDistSink' alpha minDiff
+                  where stdDev = ssdStdDev ssd
+                        count = ssdCount ssd
 
 testNormalDistribution :: (InvErf a, Ord a, Integral b) => a -> a -> b -> a -> DistributionTestResult a
 testNormalDistribution alpha stdDev count actualDiff =
@@ -148,8 +123,8 @@ updateSSD x (StreamStdDev prevC prevM prevS) = StreamStdDev {ssdCount = newC, ss
           newM = prevM + (x-prevM)/(fromIntegral newC)
           newS = prevS + (x-prevM)*(x-newM)
 
-conduitSSD :: (Fractional a, Monad m) => Conduit a m (StreamStdDev a)
-conduitSSD = do
+ssdConduit :: (Fractional a, Monad m) => Conduit a m (StreamStdDev a)
+ssdConduit = do
   mFirst <- await
   case mFirst of
     Nothing -> return ()
