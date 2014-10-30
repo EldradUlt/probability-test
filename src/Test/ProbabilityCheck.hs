@@ -41,6 +41,11 @@ data DistributionTestSummary a = DistributionTestSummary
                                  , dtsLowerBounds :: StreamStdDev a
                                  } deriving (Show, Eq)
 
+data DistributionTestInterim a = DistributionTestInterim
+                               { dtiSSD :: StreamStdDev a
+                               , dtiMinSamp :: Integer
+                               } deriving (Show, Eq)
+
 initDTS :: (Num a) => DistributionTestResult a -> DistributionTestSummary a
 initDTS (DistributionTestResult val mean stddev size upper lower) = 
   DistributionTestSummary (singleton val 1) (initSSD mean) (initSSD stddev) (initSSD $ fromIntegral size) (initSSD upper) (initSSD lower)
@@ -51,6 +56,23 @@ initDTS (DistributionTestResult val mean stddev size upper lower) =
 -- where the test passes/fails based on whether the sample average is
 -- greater than Za*stdDev/sqrt(sampleSize) where Za is the upper a
 -- percentage point of the standard normal distribution.
+
+testNormDistConduit :: (InvErf a, RealFrac a, Ord a, Monad m) => a -> a -> Conduit a m (DistributionTestInterim a)
+testNormDistConduit alpha minDiff = do
+  mNext <- await
+  case mNext of
+    Nothing -> undefined
+    Just n -> testNormDistConduit' alpha minDiff $ initSSD n
+
+testNormDistConduit' :: (InvErf a, RealFrac a, Ord a, Monad m) => a -> a -> StreamStdDev a -> Conduit a m (DistributionTestInterim a)
+testNormDistConduit' alpha minDiff ssd = do
+  mNext <- await
+  case mNext of
+    Nothing -> return ()
+    Just next -> do
+      yield $ DistributionTestInterim newSSD $ minSampleSize TwoTailed alpha minDiff $ ssdStdDev newSSD
+      testNormDistConduit' alpha minDiff newSSD
+        where newSSD = updateSSD next ssd
 
 testNormDistSink :: (InvErf a, RealFrac a, Ord a, Monad m) => a -> a -> Sink a m (DistributionTestResult a)
 testNormDistSink alpha minDiff = do

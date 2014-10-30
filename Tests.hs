@@ -23,7 +23,7 @@ main :: IO ()
 main =
   defaultMain $
   testGroup "probability-test's Tests"
-  [ testGroup "Tests for testNormDistSink"
+  [ {-testGroup "Tests for testNormDistSink"
     [ testCase "Zero simple case" $ assertResHasVal TestZero $ zeroSource $$ testNormDistSink 0.05 0.05
     , testCase "Positive simple case" $ assertResHasVal TestPositive $ oneTenthSource $$ testNormDistSink 0.05 0.05
     , testCase "100 Samples null is true." $ do
@@ -42,8 +42,8 @@ main =
            then return ()
            else assertFailure (show dts)
     ]
-  , testGroup "Tests for wilcoxon"
-    [ testCase "Simple valid null hypothesis." $ {-do
+  ,-} testGroup "Tests for wilcoxon"
+    [ {-testCase "Simple valid null hypothesis." $ {-do
          res <- tupleSource 0 0 $$ wilcoxonSink 0.01 0.05
          assertFailure $ show res-}
       assertResHasVal TestZero $ tupleSource 0 0 $$ wilcoxonSink 0.05 0.05
@@ -51,7 +51,7 @@ main =
          res <- tupleSource 0 0.1 $$ wilcoxonSink 0.01 0.05
          assertFailure $ show res-}
       assertResHasVal TestNegative $ tupleSource 0 0.1 $$ wilcoxonSink 0.05 0.05
-    , testCase "Catching HLL error." $ assertResHasVal TestNegative
+    ,-} testCase "Catching HLL error." $ assertResHasVal TestNegative
       $ (CL.unfoldM (\_ -> do
                         pair <- generate genHLLActualApprox
                         return $ Just (pair, ())) ())
