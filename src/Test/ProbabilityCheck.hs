@@ -15,7 +15,7 @@ import Control.Monad (void)
 import Data.Map.Strict (Map, singleton)
 import Data.List (sort, groupBy)
 import Control.Monad.IO.Class (MonadIO(..))
-import Data.Time (getCurrentTime, UTCTime)
+import Data.Time (getCurrentTime, UTCTime, diffUTCTime)
 
 -- This probably wants better naming at some point.
 data DistributionTestResult a = DistributionTestResult
@@ -47,13 +47,19 @@ initDTS :: (Num a) => DistributionTestResult a -> DistributionTestSummary a
 initDTS (DistributionTestResult val mean stddev size upper lower) = 
   DistributionTestSummary (singleton val 1) (initSSD mean) (initSSD stddev) (initSSD $ fromIntegral size) (initSSD upper) (initSSD lower)
 
-printTestInfo :: (InvErf a, RealFrac a, MonadIO m) => a -> a -> Conduit (StreamStdDev a) m (StreamStdDev a)
+printTestInfo :: (Show a, InvErf a, RealFrac a, MonadIO m) => a -> a -> Conduit (StreamStdDev a) m (StreamStdDev a)
 printTestInfo alpha minDiff = do
-  now <- liftIO getCurrentTime
-  printTestInfo' alpha minDiff 0 now
-
-printTestInfo' :: (InvErf a, RealFrac a, MonadIO m) => a -> a -> Integer -> UTCTime -> Conduit (StreamStdDev a) m (StreamStdDev a)
-printTestInfo' alpha minDiff cntDwn ts = undefined
+  startTime <- liftIO getCurrentTime
+  void $ CL.mapAccumM foobar (0, startTime)
+    where foobar ssd (prevC, prevTS) = do
+            now <- liftIO getCurrentTime
+            if reportNeeded
+              then do
+              liftIO $ print report
+              return ((ssdCount ssd, now), ssd)
+              else return ((prevC, prevTS), ssd)
+          reportNeeded = undefined
+          report = "undefined"
 
 testNormDistSink :: (InvErf a, RealFrac a, Ord a, Monad m) => a -> a -> Sink a m (DistributionTestResult a)
 testNormDistSink alpha minDiff = ssdConduit =$ (testNormDistSink' alpha minDiff)
@@ -81,7 +87,8 @@ testNormalDistribution alpha stdDev count actualDiff =
        else res {dtrValue = TestZero}
     where upperTest = (upperPerOfNormDist alpha) * stdDev / (sqrt $ fromIntegral count)
           lowerTest = upperTest * (-1)
-          res = DistributionTestResult { dtrValue = undefined, dtrTestedMean = actualDiff, dtrStdDev = stdDev
+          res = DistributionTestResult { dtrValue = error "DistributionTestResult's value was not written in."
+                                       , dtrTestedMean = actualDiff, dtrStdDev = stdDev
                                        , dtrSampleSize = fromIntegral count, dtrUpperBound = upperTest
                                        , dtrLowerBound = lowerTest}
 
