@@ -15,7 +15,7 @@ import Control.Monad (void)
 import Data.Map.Strict (Map, singleton)
 import Data.List (sort, groupBy)
 import Control.Monad.IO.Class (MonadIO(..))
-import Data.Time (getCurrentTime, UTCTime, diffUTCTime, addUTCTime, NominalDiffTime, utcToZonedTime, getTimeZone, getTimeZone)
+import Data.Time (getCurrentTime, diffUTCTime, addUTCTime, NominalDiffTime, utcToZonedTime, getTimeZone, getTimeZone)
 
 -- This probably wants better naming at some point.
 data DistributionTestResult a = DistributionTestResult
@@ -57,26 +57,27 @@ printTestInfo = do
                tz <- liftIO $ getTimeZone now
                let reportNeeded = lastReportLongAgo || hitMilestone
                    lastReportLongAgo = diffUTCTime now prevTS > 10 -- It has been more than 10 seconds since the last report.
-                   hitMilestone = False -- Was considering other reporting times such as thinking you're roughly 10% done.
+                   hitMilestone = prevC == 0 -- Was considering other reporting times such as thinking you're roughly 10% done.
                    report = "Completed " ++ (show curC)
                             ++ "/" ++ (show $ stopC)
                             ++ " iterations (" ++ (show $ div (100 * curC) stopC)
-                            ++ "), at " ++ (show speed) -- This wants to be displayed in sci notation with 2 sig digits.
-                            ++ " iter/sec, estimate will finish in " ++ (show estimatedTimeToFinish)
+                            ++ "%), at " ++ (show (round speed :: Integer)) -- This probably wants diff display.
+                            ++ " iter/sec, estimate will finish in " ++ (show (round estimatedTimeToFinish :: Integer)) -- Same
                             ++ " seconds (" ++ (show estimatedDateOfFinish) ++ ")."
                    curC = ssdCount ssd
                    speed = (fromIntegral curC) / (realToFrac $ diffUTCTime now startTime) :: Double -- Don't care much about accuracy.
                    estimatedTimeToFinish = realToFrac $ (fromIntegral $ stopC - curC) / speed :: NominalDiffTime
                    estimatedDateOfFinish = utcToZonedTime tz $ addUTCTime estimatedTimeToFinish now
                    runReport = do
-                     liftIO $ print report
+                     liftIO $ putStrLn report
                      return ((ssdCount ssd, now), i)
                  in if reportNeeded then runReport else return ((prevC, prevTS), i)
 
-testNormDistSink :: forall a m. (InvErf a, RealFrac a, Ord a, Monad m) => a -> a -> Sink a m (DistributionTestResult a)
-testNormDistSink alpha minDiff =    (ssdConduit :: Conduit a m (StreamStdDev a))
-                                 =$ (ssdToSSDandEnd alpha minDiff :: Conduit (StreamStdDev a) m (StreamStdDev a, Integer))
-                                 =$ ((testNormDistSink' alpha) :: Sink (StreamStdDev a, Integer) m (DistributionTestResult a))
+testNormDistSink :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => a -> a -> Sink a m (DistributionTestResult a)
+testNormDistSink alpha minDiff =    ssdConduit
+                                 =$ ssdToSSDandEnd alpha minDiff
+                                 =$ printTestInfo
+                                 =$ testNormDistSink' alpha
 
 ssdToSSDandEnd :: forall a b m. (InvErf a, RealFrac a, Ord a, Integral b, Monad m) =>
                   a -> a -> Conduit (StreamStdDev a) m (StreamStdDev a, b)
@@ -163,7 +164,7 @@ ssdConduit = do
       void (CL.mapAccum updateSSDPair $ initSSD first) =$= CL.map fst
         where updateSSDPair a s = (updateSSD a s, (updateSSD a s, a))
 
-wilcoxonSink :: (InvErf a, RealFrac a, Ord a, Monad m) => a -> a -> Sink (a,a) m (DistributionTestResult a)
+wilcoxonSink :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => a -> a -> Sink (a,a) m (DistributionTestResult a)
 wilcoxonSink alpha minDiff = wilcoxonRankedPairsConduit =$ testNormDistSink alpha minDiff
 
 wilcoxonRankedPairsConduit :: (InvErf a, RealFrac a, Ord a, Monad m) => Conduit (a,a) m a
