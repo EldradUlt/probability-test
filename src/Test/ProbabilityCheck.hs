@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, ScopedTypeVariables, FlexibleContexts #-}
+{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts, ScopedTypeVariables #-}
 
 module Test.ProbabilityCheck
        ( testNormDistSink
@@ -8,14 +8,14 @@ module Test.ProbabilityCheck
        ) where
 
 import Statistics.Test.Types (TestType(..))
-import Data.Conduit (Sink, Conduit, await, yield, (=$=), (=$))
+import Data.Conduit (Sink, Conduit, await, yield, (=$=), (=$), awaitForever)
 import qualified Data.Conduit.List as CL
 import Data.Number.Erf (invnormcdf, InvErf)
 import Control.Monad (void)
 import Data.Map.Strict (Map, singleton)
 import Data.List (sort, groupBy)
 import Control.Monad.IO.Class (MonadIO(..))
-import Data.Time (getCurrentTime, UTCTime, diffUTCTime)
+import Data.Time (getCurrentTime, UTCTime, diffUTCTime, addUTCTime, NominalDiffTime, utcToZonedTime, getTimeZone, getTimeZone)
 
 -- This probably wants better naming at some point.
 data DistributionTestResult a = DistributionTestResult
@@ -47,25 +47,45 @@ initDTS :: (Num a) => DistributionTestResult a -> DistributionTestSummary a
 initDTS (DistributionTestResult val mean stddev size upper lower) = 
   DistributionTestSummary (singleton val 1) (initSSD mean) (initSSD stddev) (initSSD $ fromIntegral size) (initSSD upper) (initSSD lower)
 
-printTestInfo :: (Show a, InvErf a, RealFrac a, MonadIO m) => a -> a -> Conduit (StreamStdDev a) m (StreamStdDev a)
-printTestInfo alpha minDiff = do
+printTestInfo :: (Show a, InvErf a, RealFrac a, MonadIO m)
+                 => Conduit (StreamStdDev a, Integer) m (StreamStdDev a, Integer)
+printTestInfo = do
   startTime <- liftIO getCurrentTime
-  void $ CL.mapAccumM foobar (0, startTime)
-    where foobar ssd (prevC, prevTS) = do
-            now <- liftIO getCurrentTime
-            if reportNeeded
-              then do
-              liftIO $ print report
-              return ((ssdCount ssd, now), ssd)
-              else return ((prevC, prevTS), ssd)
-          reportNeeded = undefined
-          report = "undefined"
+  void $ CL.mapAccumM (foobar startTime) (0, startTime)
+    where foobar startTime i@(ssd, stopC) (prevC, prevTS) =
+            do now <- liftIO getCurrentTime
+               tz <- liftIO $ getTimeZone now
+               let reportNeeded = lastReportLongAgo || hitMilestone
+                   lastReportLongAgo = diffUTCTime now prevTS > 10 -- It has been more than 10 seconds since the last report.
+                   hitMilestone = False -- Was considering other reporting times such as thinking you're roughly 10% done.
+                   report = "Completed " ++ (show curC)
+                            ++ "/" ++ (show $ stopC)
+                            ++ " iterations (" ++ (show $ div (100 * curC) stopC)
+                            ++ "), at " ++ (show speed) -- This wants to be displayed in sci notation with 2 sig digits.
+                            ++ " iter/sec, estimate will finish in " ++ (show estimatedTimeToFinish)
+                            ++ " seconds (" ++ (show estimatedDateOfFinish) ++ ")."
+                   curC = ssdCount ssd
+                   speed = (fromIntegral curC) / (realToFrac $ diffUTCTime now startTime) :: Double -- Don't care much about accuracy.
+                   estimatedTimeToFinish = realToFrac $ (fromIntegral $ stopC - curC) / speed :: NominalDiffTime
+                   estimatedDateOfFinish = utcToZonedTime tz $ addUTCTime estimatedTimeToFinish now
+                   runReport = do
+                     liftIO $ print report
+                     return ((ssdCount ssd, now), i)
+                 in if reportNeeded then runReport else return ((prevC, prevTS), i)
 
-testNormDistSink :: (InvErf a, RealFrac a, Ord a, Monad m) => a -> a -> Sink a m (DistributionTestResult a)
-testNormDistSink alpha minDiff = ssdConduit =$ (testNormDistSink' alpha minDiff)
+testNormDistSink :: forall a m. (InvErf a, RealFrac a, Ord a, Monad m) => a -> a -> Sink a m (DistributionTestResult a)
+testNormDistSink alpha minDiff =    (ssdConduit :: Conduit a m (StreamStdDev a))
+                                 =$ (ssdToSSDandEnd alpha minDiff :: Conduit (StreamStdDev a) m (StreamStdDev a, Integer))
+                                 =$ ((testNormDistSink' alpha) :: Sink (StreamStdDev a, Integer) m (DistributionTestResult a))
 
-testNormDistSink' :: (InvErf a, RealFrac a, Ord a, Monad m) => a -> a -> Sink (StreamStdDev a) m (DistributionTestResult a)
-testNormDistSink' alpha minDiff = do
+ssdToSSDandEnd :: forall a b m. (InvErf a, RealFrac a, Ord a, Integral b, Monad m) =>
+                  a -> a -> Conduit (StreamStdDev a) m (StreamStdDev a, b)
+ssdToSSDandEnd alpha minDiff = awaitForever givePair
+  where givePair :: StreamStdDev a -> Conduit (StreamStdDev a) m (StreamStdDev a, b)
+        givePair ssd = yield (ssd, minSampleSize TwoTailed alpha minDiff $ (ssdStdDev ssd :: a))
+
+testNormDistSink' :: (InvErf a, RealFrac a, Ord a, Monad m) => a -> Sink (StreamStdDev a, Integer) m (DistributionTestResult a)
+testNormDistSink' alpha = do
   mNext <- await
   case mNext of
     Nothing -> return $ DistributionTestResult
@@ -74,11 +94,11 @@ testNormDistSink' alpha minDiff = do
                -- eventually or will peek at the next.
                { dtrValue = TestInsufficientSample, dtrTestedMean = 0, dtrStdDev = 0
                , dtrSampleSize = 0, dtrUpperBound = 0, dtrLowerBound = 0}
-    Just ssd -> if minSampleSize TwoTailed alpha minDiff stdDev <= count
-                then return $ testNormalDistribution alpha stdDev count $ ssdMean ssd
-                else testNormDistSink' alpha minDiff
-                  where stdDev = ssdStdDev ssd
-                        count = ssdCount ssd
+    Just (ssd, endC) -> if endC <= count
+                        then return $ testNormalDistribution alpha stdDev count $ ssdMean ssd
+                        else testNormDistSink' alpha
+                          where stdDev = ssdStdDev ssd
+                                count = ssdCount ssd
 
 testNormalDistribution :: (InvErf a, Ord a, Integral b) => a -> a -> b -> a -> DistributionTestResult a
 testNormalDistribution alpha stdDev count actualDiff =
