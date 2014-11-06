@@ -51,19 +51,21 @@ printTestInfo :: (Show a, InvErf a, RealFrac a, MonadIO m)
                  => Conduit (StreamStdDev a, Integer) m (StreamStdDev a, Integer)
 printTestInfo = do
   startTime <- liftIO getCurrentTime
+  liftIO $ putStrLn "~"
   void $ CL.mapAccumM (foobar startTime) (0, startTime)
     where foobar startTime i@(ssd, stopC) (prevC, prevTS) =
             do now <- liftIO getCurrentTime
                tz <- liftIO $ getTimeZone now
                let reportNeeded = lastReportLongAgo || hitMilestone
                    lastReportLongAgo = diffUTCTime now prevTS > 10 -- It has been more than 10 seconds since the last report.
-                   hitMilestone = prevC == 0 -- Was considering other reporting times such as thinking you're roughly 10% done.
-                   report = "Completed " ++ (show curC)
+                   hitMilestone = curC == 1 || curC == 2 || curC == 3 -- Probably want other stuff here.
+                   report = "StreamStdDev = " ++ (show ssd)
+                            ++ "\nCompleted " ++ (show curC)
                             ++ "/" ++ (show $ stopC)
-                            ++ " iterations (" ++ (show $ div (100 * curC) stopC)
+                            ++ " iter (" ++ (show $ div (100 * curC) stopC)
                             ++ "%), at " ++ (show (round speed :: Integer)) -- This probably wants diff display.
-                            ++ " iter/sec, estimate will finish in " ++ (show (round estimatedTimeToFinish :: Integer)) -- Same
-                            ++ " seconds (" ++ (show estimatedDateOfFinish) ++ ")."
+                            ++ " iter/s, finish in " ++ (show (round estimatedTimeToFinish :: Integer)) -- Same
+                            ++ " s (" ++ (show estimatedDateOfFinish) ++ ")."
                    curC = ssdCount ssd
                    speed = (fromIntegral curC) / (realToFrac $ diffUTCTime now startTime) :: Double -- Don't care much about accuracy.
                    estimatedTimeToFinish = realToFrac $ (fromIntegral $ stopC - curC) / speed :: NominalDiffTime
@@ -167,14 +169,23 @@ ssdConduit = do
 wilcoxonSink :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => a -> a -> Sink (a,a) m (DistributionTestResult a)
 wilcoxonSink alpha minDiff = wilcoxonRankedPairsConduit =$ testNormDistSink alpha minDiff
 
-wilcoxonRankedPairsConduit :: (InvErf a, RealFrac a, Ord a, Monad m) => Conduit (a,a) m a
-wilcoxonRankedPairsConduit = (CL.map $ uncurry (-)) =$= wilcoxonRankedConduit' 40
+wilcoxonRankedPairsConduit :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => Conduit (a,a) m a
+wilcoxonRankedPairsConduit = conduitPrint
+                             =$= (CL.map $ uncurry (-))
+                             =$= conduitPrint
+                             =$= wilcoxonRankedConduit' 40
 
-wilcoxonRankedConduit' :: (InvErf a, RealFrac a, Ord a, Monad m) => Int -> Conduit a m a
+conduitPrint :: (Show a, MonadIO m) => Conduit a m a
+conduitPrint = CL.mapM (\x -> do
+                           liftIO (print x) 
+                           return x)
+
+wilcoxonRankedConduit' :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => Int -> Conduit a m a
 wilcoxonRankedConduit' size = do
   lst <- CL.take size
+  liftIO $ print lst
   if length lst == size then 
-    let pLst = sort $  map (\a -> (abs a, signum a)) lst
+    let pLst = sort $ map (\a -> (abs a, signum a)) lst
         n = fromIntegral $ length pLst
         rankedLst = assignRanks 0 $ groupBy (\p1 p2 -> (fst p1) == (fst p2)) pLst
         assignRanks _ [] = []

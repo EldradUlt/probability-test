@@ -18,15 +18,16 @@ import Test.QuickCheck (Gen, arbitrary, generate)
 import Data.Monoid (mempty)
 import Numeric.Log (Log(..), Precise)
 import Data.Number.Erf (InvErf(..))
+import Control.Concurrent (threadDelay)
+import qualified Data.Sign as S
 
 main :: IO ()
 main =
   defaultMain $
   testGroup "probability-test's Tests"
   [ testGroup "Tests for testNormDistSink"
-    [ testCase "Zero simple case" $ assertResHasVal TestZero $ zeroSource $$ testNormDistSink 0.01 0.01
+    [ {-testCase "Zero simple case" $ assertResHasVal TestZero $ zeroSource $$ testNormDistSink 0.01 0.01
     , testCase "Positive simple case" $ assertResHasVal TestPositive $ oneTenthSource $$ testNormDistSink 0.01 0.01
-    {-
     , testCase "100 Samples null is true." $ do
       lst <- sequence $ replicate 100 $ zeroSource $$ testNormDistSink 0.05 0.05
       let dts = foldl dtrFolder (initDTS $ head lst) $ tail lst
@@ -45,7 +46,7 @@ main =
     -}
     ]
   , testGroup "Tests for wilcoxon"
-    [ testCase "Simple valid null hypothesis." $ {-do
+    [ {-testCase "Simple valid null hypothesis." $ {-do
          res <- tupleSource 0 0 $$ wilcoxonSink 0.01 0.05
          assertFailure $ show res-}
       assertResHasVal TestZero $ tupleSource 0 0 $$ wilcoxonSink 0.05 0.05
@@ -53,16 +54,50 @@ main =
          res <- tupleSource 0 0.1 $$ wilcoxonSink 0.01 0.05
          assertFailure $ show res-}
       assertResHasVal TestNegative $ tupleSource 0 0.1 $$ wilcoxonSink 0.05 0.05
-    , testCase "Catching HLL error." $ assertResHasVal TestNegative
-      $ (CL.unfoldM (\_ -> do
-                        pair <- generate genHLLActualApprox
-                        return $ Just (pair, ())) ())
-      =$ CL.map (\(actual, hll) -> 
-                  let (Approximate conf lo _ hi) = HLL.size hll
-                  in (conf, if lo <= actual && actual <= hi then 1 else 0))
-      $$ wilcoxonSink 0.05 0.05
+    , -}testCase "Catching HLL error." $ do
+      threadDelay 100000
+      assertResHasVal TestNegative
+        $ (CL.unfoldM (\_ -> do
+                          pair <- generate genHLLActualApprox
+                          return $ Just (pair, ())) ())
+        =$ CL.map (\(actual, hll) -> 
+                    let (Approximate conf lo _ hi) = HLL.size hll
+                    in (conf, if lo <= actual && actual <= hi then 1 else 0))
+        $$ wilcoxonSink 0.05 0.05
     ]
   ]
+
+data SignedLog a = SignedLog {
+    slSign :: S.Sign
+  , slLn :: Log a
+  } deriving (Show, Eq, Ord) -- Don't actually want to use derived
+                             -- versions. slLn should only be
+                             -- evaluated if slSign is not Zero.
+
+instance (Num a, Ord a, Precise a, RealFloat a) => Num (SignedLog a) where
+  negate (SignedLog s a) = SignedLog (S.negate s) a
+  abs (SignedLog s a) = SignedLog (S.abs s) a
+  signum (SignedLog s _) = SignedLog s 1
+  fromInteger i = SignedLog (signOf i) (fromInteger $ abs i)
+    where signOf x = if x > 0 then S.Pos else if x == 0 then S.Zero else S.Neg
+  (+) (SignedLog sA a) (SignedLog sB b) =
+    case (sA, sB, compare a b) of
+      (S.Zero, _, _) -> SignedLog sB b
+      (_, S.Zero, _) -> SignedLog sA a
+      (s1, s2, _) | s1 == s2 -> SignedLog sA (a + b)
+      (_, _, LT) -> SignedLog sB (b - a)
+      (_, _, EQ) -> SignedLog S.Zero a
+      (_, _, GT) -> SignedLog sA (a - b)
+  (*) (SignedLog sA a) (SignedLog sB b) = SignedLog (S.mult sA sB) (a*b)
+
+{-
+instance (RealFrac a) => RealFrac (SignedLog a) where
+  properFraction (SignedLog sig a) = let (i,f) = properFraction a
+                                     in ((if sig then id else negate) i, SignedLog sig f)
+
+instance (Real a) => Real (SignedLog a) where
+  
+-}
 
 -- This wants to be replaced with a more accurate instance.
 instance (InvErf a, Precise a, RealFloat a) => InvErf (Log a) where

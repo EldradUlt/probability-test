@@ -36,6 +36,7 @@ Test-Suite probability-test-tests
     , containers == 0.5.*
     , hyperloglog == 0.2.3.2
     , reflection == 1.5.*
+    , sign == 0.4.*
 
 library
   exposed-modules:     Test.ProbabilityCheck
