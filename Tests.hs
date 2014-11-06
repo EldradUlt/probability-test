@@ -20,6 +20,7 @@ import Numeric.Log (Log(..), Precise)
 import Data.Number.Erf (InvErf(..))
 import Control.Concurrent (threadDelay)
 import qualified Data.Sign as S
+import Data.Ratio ((%), numerator, denominator)
 
 main :: IO ()
 main =
@@ -70,16 +71,29 @@ main =
 data SignedLog a = SignedLog {
     slSign :: S.Sign
   , slLn :: Log a
-  } deriving (Show, Eq, Ord) -- Don't actually want to use derived
-                             -- versions. slLn should only be
-                             -- evaluated if slSign is not Zero.
+  }
+
+instance (Show a, Floating a) => Show (SignedLog a) where
+  show (SignedLog s a) = S.symbol s ++ if s == S.Zero then "" else show a
+
+instance (Eq a) => Eq (SignedLog a) where
+  (SignedLog sA a) == (SignedLog sB b) = (sA == sB) && (sA == S.Zero || a == b)
+
+instance (Ord a) => Ord (SignedLog a) where
+  compare (SignedLog sA a) (SignedLog sB b) = case (compare sA sB, sA) of
+    (EQ, S.Pos) -> compare a b
+    (EQ, S.Zero) -> EQ
+    (EQ, S.Neg) -> compare b a
+    (r, _) -> r
+
+signOf :: (Num a, Ord a) => a -> S.Sign
+signOf x = if x > 0 then S.Pos else if x == 0 then S.Zero else S.Neg
 
 instance (Num a, Ord a, Precise a, RealFloat a) => Num (SignedLog a) where
   negate (SignedLog s a) = SignedLog (S.negate s) a
   abs (SignedLog s a) = SignedLog (S.abs s) a
   signum (SignedLog s _) = SignedLog s 1
   fromInteger i = SignedLog (signOf i) (fromInteger $ abs i)
-    where signOf x = if x > 0 then S.Pos else if x == 0 then S.Zero else S.Neg
   (+) (SignedLog sA a) (SignedLog sB b) =
     case (sA, sB, compare a b) of
       (S.Zero, _, _) -> SignedLog sB b
@@ -90,14 +104,34 @@ instance (Num a, Ord a, Precise a, RealFloat a) => Num (SignedLog a) where
       (_, _, GT) -> SignedLog sA (a - b)
   (*) (SignedLog sA a) (SignedLog sB b) = SignedLog (S.mult sA sB) (a*b)
 
-{-
-instance (RealFrac a) => RealFrac (SignedLog a) where
-  properFraction (SignedLog sig a) = let (i,f) = properFraction a
-                                     in ((if sig then id else negate) i, SignedLog sig f)
+instance (Real a, Precise a, RealFloat a) => Real (SignedLog a) where
+  toRational (SignedLog s a) = case s of
+    S.Pos -> toRational a
+    S.Zero -> 0
+    S.Neg -> (-1) * (toRational a)
 
-instance (Real a) => Real (SignedLog a) where
-  
--}
+instance (Fractional a, Precise a, RealFloat a) => Fractional (SignedLog a) where
+  fromRational r = case (signOf $ numerator r, signOf $ denominator r) of
+    -- If sign is Zero then value is 0 reguardless of LN. Therefore if
+    -- result actually wants to be some form of +/- inf or NaN the
+    -- sign should not be Zero.
+    (S.Zero, S.Zero) -> SignedLog S.Pos $ fromRational r
+    (s, S.Zero) -> SignedLog s $ fromRational $ abs r
+    (sA, sB) -> SignedLog (S.mult sA sB) $ fromRational $ abs r
+  (SignedLog sA a) / (SignedLog sB b) = case sB of
+    S.Pos -> SignedLog sA (a/b)
+    S.Zero -> fromRational ((signToNum sA) % 0)
+    S.Neg -> SignedLog (S.negate sA) (a/b)
+
+signToNum :: (Num a) => S.Sign -> a
+signToNum s = case s of
+  S.Pos -> 1
+  S.Zero -> 0
+  S.Neg -> -1
+
+instance (RealFrac a, Precise a, RealFloat a) => RealFrac (SignedLog a) where
+  properFraction (SignedLog s a) = let (i,f) = properFraction a
+                                     in (i * (signToNum s), SignedLog s f)
 
 -- This wants to be replaced with a more accurate instance.
 instance (InvErf a, Precise a, RealFloat a) => InvErf (Log a) where
