@@ -76,11 +76,11 @@ printTestInfo = do
                      return ((ssdCount ssd, now), i)
                  in if reportNeeded then runReport else return ((prevC, prevTS), i)
 
-testNormDistSink :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => a -> a -> Sink a m (DistributionTestResult a)
-testNormDistSink alpha minDiff =    ssdConduit
-                                 =$ ssdToSSDandEnd alpha minDiff
-                                 =$ printTestInfo
-                                 =$ testNormDistSink' alpha
+testNormDistSink :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => Bool -> a -> a -> Sink a m (DistributionTestResult a)
+testNormDistSink prnt alpha minDiff =    ssdConduit
+                                      =$ ssdToSSDandEnd alpha minDiff
+                                      =$ (if prnt then printTestInfo else CL.map id)
+                                      =$ testNormDistSink' alpha
 
 ssdToSSDandEnd :: forall a b m. (InvErf a, RealFrac a, Ord a, Integral b, Monad m) =>
                   a -> a -> Conduit (StreamStdDev a) m (StreamStdDev a, b)
@@ -168,12 +168,12 @@ ssdConduit = do
         where updateSSDPair a s = (updateSSD a s, (updateSSD a s, a))
 
 wilcoxonSink :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => a -> a -> Sink (a,a) m (DistributionTestResult a)
-wilcoxonSink alpha minDiff = wilcoxonRankedPairsConduit =$ testNormDistSink alpha minDiff
+wilcoxonSink alpha minDiff = wilcoxonRankedPairsConduit =$ testNormDistSink True alpha minDiff
 
 wilcoxonRankedPairsConduit :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => Conduit (a,a) m a
-wilcoxonRankedPairsConduit =  conduitPrint
-                             =$= (CL.map $ uncurry (-))
-                             =$= conduitPrint
+wilcoxonRankedPairsConduit =  {-conduitPrint
+                             =$=-} (CL.map $ uncurry (-))
+                             -- =$= conduitPrint
                              =$= wilcoxonRankedConduit' 40
 
 conduitPrint :: (Show a, MonadIO m) => Conduit a m a

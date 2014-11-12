@@ -25,11 +25,11 @@ main :: IO ()
 main =
   defaultMain $
   testGroup "probability-test's Tests"
-  [ {-testGroup "Tests for testNormDistSink"
-    [ testCase "Zero simple case" $ assertResHasVal TestZero $ zeroSource $$ testNormDistSink 0.01 0.01
-    , testCase "Positive simple case" $ assertResHasVal TestPositive $ oneTenthSource $$ testNormDistSink 0.01 0.01
+  [ testGroup "Tests for testNormDistSink"
+    [ testCase "Zero simple case" $ assertResHasVal TestZero $ zeroSource $$ testNormDistSink True 0.01 0.01
+    , testCase "Positive simple case" $ assertResHasVal TestPositive $ oneTenthSource $$ testNormDistSink True 0.01 0.01
     , testCase "100 Samples null is true." $ do
-      lst <- sequence $ replicate 100 $ zeroSource $$ testNormDistSink 0.05 0.05
+      lst <- sequence $ replicate 100 $ zeroSource $$ testNormDistSink True 0.05 0.05
       let dts = foldl dtrFolder (initDTS $ head lst) $ tail lst
         in if (dtsValues dts) ! TestZero >= 85
            then return ()
@@ -38,14 +38,14 @@ main =
     -- when the actual difference is close to the 'minDiff'. This may
     -- be simply due to not accounting for the estimation of variance.
     , testCase "100 samples null is false." $ do
-      lst <- sequence $ replicate 100 $ oneTenthSource $$ testNormDistSink 0.05 0.05
+      lst <- sequence $ replicate 100 $ oneTenthSource $$ testNormDistSink True 0.05 0.05
       let dts = foldl dtrFolder (initDTS $ head lst) $ tail lst
         in if (dtsValues dts) ! TestPositive >= 85
            then return ()
            else assertFailure (show dts)
     ]
-  , -}testGroup "Tests for wilcoxon"
-    [ {-testCase "Simple valid null hypothesis." $ {-do
+  , testGroup "Tests for wilcoxon"
+    [ testCase "Simple valid null hypothesis." $ {-do
          res <- tupleSource 0 0 $$ wilcoxonSink 0.01 0.05
          assertFailure $ show res-}
       assertResHasVal TestZero $ tupleSource 0 0 $$ wilcoxonSink 0.05 0.05
@@ -53,17 +53,17 @@ main =
          res <- tupleSource 0 0.1 $$ wilcoxonSink 0.01 0.05
          assertFailure $ show res-}
       assertResHasVal TestNegative $ tupleSource 0 0.1 $$ wilcoxonSink 0.05 0.05
-    , -}testCase "Catching HLL error." $ do
+    , testCase "Catching HLL error." $ do
       assertResHasVal TestZero
         $ (CL.unfoldM (\_ -> do
                           (pair, lst) <- generate genHLLActualApprox
-                          putStrLn $ (show $ fst pair) ++ ", " ++ (show $ HLL.size $ snd pair)
-                          print lst
+                          --putStrLn $ (show $ fst pair) ++ ", " ++ (show $ HLL.size $ snd pair)
+                          --print lst
                           return $ Just (pair, ())) ())
         =$ CL.map (\(actual, hll) ->
                     let (Approximate conf lo _ hi) = HLL.size hll
                     in (realToFrac conf, if lo <= actual && actual <= hi then 1 else 0) :: (SignedLog Double, SignedLog Double))
-        $$ wilcoxonSink 0.1 0.1
+        $$ wilcoxonSink 0.01 0.01
     ]
   ]
 
