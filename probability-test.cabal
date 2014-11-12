@@ -29,12 +29,12 @@ Test-Suite probability-test-tests
     , tasty
     , approximate == 0.2.*
     , tasty-quickcheck == 0.8.*
-    , log-domain == 0.9.*
+    , log-domain >= 0.9.3
     , mwc-random == 0.13.*
     , conduit == 1.1.*
     , erf == 2.0.*
     , containers == 0.5.*
-    , hyperloglog == 0.2.3.2
+    , hyperloglog
     , reflection == 1.5.*
     , sign == 0.4.*
 

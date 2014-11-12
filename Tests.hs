@@ -18,16 +18,15 @@ import Test.QuickCheck (Gen, arbitrary, generate)
 import Data.Monoid (mempty)
 import Numeric.Log (Log(..), Precise)
 import Data.Number.Erf (InvErf(..))
-import Control.Concurrent (threadDelay)
 import qualified Data.Sign as S
-import Data.Ratio ((%), numerator, denominator)
+import Data.Ratio (numerator, denominator)
 
 main :: IO ()
 main =
   defaultMain $
   testGroup "probability-test's Tests"
-  [ testGroup "Tests for testNormDistSink"
-    [ {-testCase "Zero simple case" $ assertResHasVal TestZero $ zeroSource $$ testNormDistSink 0.01 0.01
+  [ {-testGroup "Tests for testNormDistSink"
+    [ testCase "Zero simple case" $ assertResHasVal TestZero $ zeroSource $$ testNormDistSink 0.01 0.01
     , testCase "Positive simple case" $ assertResHasVal TestPositive $ oneTenthSource $$ testNormDistSink 0.01 0.01
     , testCase "100 Samples null is true." $ do
       lst <- sequence $ replicate 100 $ zeroSource $$ testNormDistSink 0.05 0.05
@@ -44,9 +43,8 @@ main =
         in if (dtsValues dts) ! TestPositive >= 85
            then return ()
            else assertFailure (show dts)
-    -}
     ]
-  , testGroup "Tests for wilcoxon"
+  , -}testGroup "Tests for wilcoxon"
     [ {-testCase "Simple valid null hypothesis." $ {-do
          res <- tupleSource 0 0 $$ wilcoxonSink 0.01 0.05
          assertFailure $ show res-}
@@ -56,15 +54,16 @@ main =
          assertFailure $ show res-}
       assertResHasVal TestNegative $ tupleSource 0 0.1 $$ wilcoxonSink 0.05 0.05
     , -}testCase "Catching HLL error." $ do
-      threadDelay 100000
-      assertResHasVal TestNegative
+      assertResHasVal TestZero
         $ (CL.unfoldM (\_ -> do
-                          pair <- generate genHLLActualApprox
+                          (pair, lst) <- generate genHLLActualApprox
+                          putStrLn $ (show $ fst pair) ++ ", " ++ (show $ HLL.size $ snd pair)
+                          print lst
                           return $ Just (pair, ())) ())
-        =$ CL.map (\(actual, hll) -> 
+        =$ CL.map (\(actual, hll) ->
                     let (Approximate conf lo _ hi) = HLL.size hll
-                    in (conf, if lo <= actual && actual <= hi then 1 else 0))
-        $$ wilcoxonSink 0.05 0.05
+                    in (realToFrac conf, if lo <= actual && actual <= hi then 1 else 0) :: (SignedLog Double, SignedLog Double))
+        $$ wilcoxonSink 0.1 0.1
     ]
   ]
 
@@ -74,7 +73,10 @@ data SignedLog a = SignedLog {
   }
 
 instance (Show a, Floating a) => Show (SignedLog a) where
-  show (SignedLog s a) = S.symbol s ++ if s == S.Zero then "" else show a
+  show (SignedLog s a) = case s of
+    S.Pos -> show a
+    S.Zero -> show (0 :: a)
+    S.Neg -> S.symbol s ++ show a
 
 instance (Eq a) => Eq (SignedLog a) where
   (SignedLog sA a) == (SignedLog sB b) = (sA == sB) && (sA == S.Zero || a == b)
@@ -100,15 +102,33 @@ instance (Num a, Ord a, Precise a, RealFloat a) => Num (SignedLog a) where
       (_, S.Zero, _) -> SignedLog sA a
       (s1, s2, _) | s1 == s2 -> SignedLog sA (a + b)
       (_, _, LT) -> SignedLog sB (b - a)
-      (_, _, EQ) -> SignedLog S.Zero a
+      (_, _, EQ) -> SignedLog S.Zero (a - b)
       (_, _, GT) -> SignedLog sA (a - b)
-  (*) (SignedLog sA a) (SignedLog sB b) = SignedLog (S.mult sA sB) (a*b)
+  (*) (SignedLog sA a) (SignedLog sB b) = SignedLog (S.mult sA sB) (a*b) -- This doesn't probably handle 0*NaN or 0*Inf
 
 instance (Real a, Precise a, RealFloat a) => Real (SignedLog a) where
   toRational (SignedLog s a) = case s of
     S.Pos -> toRational a
     S.Zero -> 0
     S.Neg -> (-1) * (toRational a)
+
+-- Um obviously lacking def.
+instance (Floating a, Precise a, RealFloat a) => Floating (SignedLog a) where
+  sqrt (SignedLog S.Neg _) = SignedLog S.Pos $ realToFrac $ (0/0 :: a)
+  sqrt (SignedLog s a) = SignedLog s $ sqrt a
+  pi = undefined
+  exp = undefined
+  log = undefined
+  sin = undefined
+  cos = undefined
+  asin = undefined
+  atan = undefined
+  acos = undefined
+  sinh = undefined
+  cosh = undefined
+  asinh = undefined
+  atanh = undefined
+  acosh = undefined
 
 instance (Fractional a, Precise a, RealFloat a) => Fractional (SignedLog a) where
   fromRational r = case (signOf $ numerator r, signOf $ denominator r) of
@@ -119,9 +139,8 @@ instance (Fractional a, Precise a, RealFloat a) => Fractional (SignedLog a) wher
     (s, S.Zero) -> SignedLog s $ fromRational $ abs r
     (sA, sB) -> SignedLog (S.mult sA sB) $ fromRational $ abs r
   (SignedLog sA a) / (SignedLog sB b) = case sB of
-    S.Pos -> SignedLog sA (a/b)
-    S.Zero -> fromRational ((signToNum sA) % 0)
     S.Neg -> SignedLog (S.negate sA) (a/b)
+    _ -> SignedLog sA (a/b)
 
 signToNum :: (Num a) => S.Sign -> a
 signToNum s = case s of
@@ -131,21 +150,20 @@ signToNum s = case s of
 
 instance (RealFrac a, Precise a, RealFloat a) => RealFrac (SignedLog a) where
   properFraction (SignedLog s a) = let (i,f) = properFraction a
-                                     in (i * (signToNum s), SignedLog s f)
+                                         in (i * (signToNum s), SignedLog s f)
 
 -- This wants to be replaced with a more accurate instance.
-instance (InvErf a, Precise a, RealFloat a) => InvErf (Log a) where
+instance (InvErf a, Precise a, RealFloat a) => InvErf (SignedLog a) where
   invnormcdf l = realToFrac $ invnormcdf (realToFrac l::a)
 
 -- This wants to be replaced with a more accurate instance.
 instance (RealFrac a, Precise a, RealFloat a) => RealFrac (Log a) where
   properFraction l = (\(b,a) -> (b, realToFrac a)) $ properFraction $ exp (ln l)
 
-
-genHLLActualApprox :: (Num a) => Gen (a, HLL.HyperLogLog $(nat 5))
+genHLLActualApprox :: (Num a) => Gen ((a, HLL.HyperLogLog $(nat 5)), [Integer])
 genHLLActualApprox = do
   lst <- arbitrary :: Gen [Integer]
-  return (fromIntegral $ length $ nub lst, foldl (flip HLL.insert) mempty lst)
+  return ((fromIntegral $ length $ nub lst, foldl (flip HLL.insert) mempty lst), lst)
 
 dtrFolder :: (Fractional a) => DistributionTestSummary a -> DistributionTestResult a -> DistributionTestSummary a
 dtrFolder (DistributionTestSummary sVals sMeans sStdDevs sCounts sUppers sLowers)

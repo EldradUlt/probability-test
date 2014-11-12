@@ -16,6 +16,7 @@ import Data.Map.Strict (Map, singleton)
 import Data.List (sort, groupBy)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Time (getCurrentTime, diffUTCTime, addUTCTime, NominalDiffTime, utcToZonedTime, getTimeZone, getTimeZone)
+import Control.Concurrent (threadDelay)
 
 -- This probably wants better naming at some point.
 data DistributionTestResult a = DistributionTestResult
@@ -51,16 +52,16 @@ printTestInfo :: (Show a, InvErf a, RealFrac a, MonadIO m)
                  => Conduit (StreamStdDev a, Integer) m (StreamStdDev a, Integer)
 printTestInfo = do
   startTime <- liftIO getCurrentTime
-  liftIO $ putStrLn "~"
+  liftIO $ threadDelay 10000 -- This prevents some printing collision issues but could slow things down if called a lot for some reason.
+  liftIO $ putStrLn ""
   void $ CL.mapAccumM (foobar startTime) (0, startTime)
     where foobar startTime i@(ssd, stopC) (prevC, prevTS) =
             do now <- liftIO getCurrentTime
                tz <- liftIO $ getTimeZone now
                let reportNeeded = lastReportLongAgo || hitMilestone
                    lastReportLongAgo = diffUTCTime now prevTS > 10 -- It has been more than 10 seconds since the last report.
-                   hitMilestone = curC == 1 || curC == 2 || curC == 3 -- Probably want other stuff here.
-                   report = "StreamStdDev = " ++ (show ssd)
-                            ++ "\nCompleted " ++ (show curC)
+                   hitMilestone = curC == 2 || curC >= stopC -- Probably want other stuff here.
+                   report = "Completed " ++ (show curC)
                             ++ "/" ++ (show $ stopC)
                             ++ " iter (" ++ (show $ div (100 * curC) stopC)
                             ++ "%), at " ++ (show (round speed :: Integer)) -- This probably wants diff display.
@@ -170,7 +171,7 @@ wilcoxonSink :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => a -> a -> Si
 wilcoxonSink alpha minDiff = wilcoxonRankedPairsConduit =$ testNormDistSink alpha minDiff
 
 wilcoxonRankedPairsConduit :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => Conduit (a,a) m a
-wilcoxonRankedPairsConduit = conduitPrint
+wilcoxonRankedPairsConduit =  conduitPrint
                              =$= (CL.map $ uncurry (-))
                              =$= conduitPrint
                              =$= wilcoxonRankedConduit' 40
@@ -183,7 +184,7 @@ conduitPrint = CL.mapM (\x -> do
 wilcoxonRankedConduit' :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => Int -> Conduit a m a
 wilcoxonRankedConduit' size = do
   lst <- CL.take size
-  liftIO $ print lst
+  --liftIO $ print lst
   if length lst == size then 
     let pLst = sort $ map (\a -> (abs a, signum a)) lst
         n = fromIntegral $ length pLst
