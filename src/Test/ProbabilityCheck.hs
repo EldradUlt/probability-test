@@ -169,14 +169,14 @@ ssdConduit = do
       void (CL.mapAccum updateSSDPair $ initSSD first) =$= CL.map fst
         where updateSSDPair a s = (updateSSD a s, (updateSSD a s, a))
 
-wilcoxonSink :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => a -> a -> Sink (a,a) m (DistributionTestResult a)
-wilcoxonSink alpha minDiff = wilcoxonRankedPairsConduit =$ testNormDistSink True alpha minDiff
+wilcoxonSink :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => Int -> a -> a -> Sink (a,a) m (DistributionTestResult a)
+wilcoxonSink size alpha minDiff = wilcoxonRankedPairsConduit size =$ testNormDistSink True alpha minDiff
 
-wilcoxonRankedPairsConduit :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => Conduit (a,a) m a
-wilcoxonRankedPairsConduit = {-    conduitPrint
+wilcoxonRankedPairsConduit :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => Int -> Conduit (a,a) m a
+wilcoxonRankedPairsConduit size = {-    conduitPrint
                              =$=-} (CL.map $ uncurry (-))
                              -- =$= conduitPrint
-                             =$= wilcoxonRankedConduit' 10000
+                             =$= wilcoxonRankedConduit' size
 
 conduitPrint :: (Show a, MonadIO m) => Conduit a m a
 conduitPrint = CL.mapM (\x -> do
