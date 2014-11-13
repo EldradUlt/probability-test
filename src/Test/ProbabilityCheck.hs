@@ -67,6 +67,7 @@ printTestInfo = do
                             ++ "%), at " ++ (show (round speed :: Integer)) -- This probably wants diff display.
                             ++ " iter/s, finish in " ++ (show (round estimatedTimeToFinish :: Integer)) -- Same
                             ++ " s (" ++ (show estimatedDateOfFinish) ++ ")."
+                            ++ " stddev = " ++ (show $ ssdStdDev ssd)
                    curC = ssdCount ssd
                    speed = (fromIntegral curC) / (realToFrac $ diffUTCTime now startTime) :: Double -- Don't care much about accuracy.
                    estimatedTimeToFinish = realToFrac $ (fromIntegral $ stopC - curC) / speed :: NominalDiffTime
@@ -79,6 +80,7 @@ printTestInfo = do
 testNormDistSink :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => Bool -> a -> a -> Sink a m (DistributionTestResult a)
 testNormDistSink prnt alpha minDiff =    ssdConduit
                                       =$ ssdToSSDandEnd alpha minDiff
+                                      -- =$ conduitPrint
                                       =$ (if prnt then printTestInfo else CL.map id)
                                       =$ testNormDistSink' alpha
 
@@ -171,10 +173,10 @@ wilcoxonSink :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => a -> a -> Si
 wilcoxonSink alpha minDiff = wilcoxonRankedPairsConduit =$ testNormDistSink True alpha minDiff
 
 wilcoxonRankedPairsConduit :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => Conduit (a,a) m a
-wilcoxonRankedPairsConduit =  {-conduitPrint
+wilcoxonRankedPairsConduit = {-    conduitPrint
                              =$=-} (CL.map $ uncurry (-))
                              -- =$= conduitPrint
-                             =$= wilcoxonRankedConduit' 40
+                             =$= wilcoxonRankedConduit' 10000
 
 conduitPrint :: (Show a, MonadIO m) => Conduit a m a
 conduitPrint = CL.mapM (\x -> do
@@ -197,6 +199,7 @@ wilcoxonRankedConduit' size = do
         testValue = t / (sqrt $ ((2*n*(n+1)*(2*n+1)) / 3) * (pPos + pNeg - ((pPos - pNeg)^(2::Integer))))
     in do
       yield testValue
+      -- liftIO $ print testValue
       wilcoxonRankedConduit' size
     else return ()
 
