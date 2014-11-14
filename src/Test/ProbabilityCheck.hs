@@ -8,7 +8,7 @@ module Test.ProbabilityCheck
        ) where
 
 import Statistics.Test.Types (TestType(..))
-import Data.Conduit (Sink, Conduit, await, yield, (=$=), (=$), awaitForever)
+import Data.Conduit (Sink, Conduit, await, yield, (=$=), (=$), awaitForever, addCleanup)
 import qualified Data.Conduit.List as CL
 import Data.Number.Erf (invnormcdf, InvErf)
 import Control.Monad (void)
@@ -53,13 +53,13 @@ printTestInfo :: (Show a, InvErf a, RealFrac a, MonadIO m)
 printTestInfo = do
   startTime <- liftIO getCurrentTime
   liftIO $ threadDelay 10000 -- This prevents some printing collision issues but could slow things down if called a lot for some reason.
-  liftIO $ putStrLn ""
-  void $ CL.mapAccumM (foobar startTime) (0, startTime)
-    where foobar startTime i@(ssd, stopC) (prevC, prevTS) =
+  liftIO $ putChar '\n'
+  void $ CL.mapAccumM (go startTime) (0, startTime, 0)
+    where go startTime i@(ssd, stopC) (prevC, prevTS, prevRL) =
             do now <- liftIO getCurrentTime
                tz <- liftIO $ getTimeZone now
                let reportNeeded = lastReportLongAgo || hitMilestone
-                   lastReportLongAgo = diffUTCTime now prevTS > 10 -- It has been more than 10 seconds since the last report.
+                   lastReportLongAgo = diffUTCTime now prevTS > 1 -- It has been more than 1 second since the last report.
                    hitMilestone = curC == 2 || curC >= stopC -- Probably want other stuff here.
                    report = "Completed " ++ (show curC)
                             ++ "/" ++ (show $ stopC)
@@ -68,14 +68,15 @@ printTestInfo = do
                             ++ " iter/s, finish in " ++ (show (round estimatedTimeToFinish :: Integer)) -- Same
                             ++ " s (" ++ (show estimatedDateOfFinish) ++ ")."
                             ++ " stddev = " ++ (show $ ssdStdDev ssd)
+                   --report = if length report' < prevRL then report' ++ (replicate (prevRL - (length report)) ' ') else report'
                    curC = ssdCount ssd
                    speed = (fromIntegral curC) / (realToFrac $ diffUTCTime now startTime) :: Double -- Don't care much about accuracy.
                    estimatedTimeToFinish = realToFrac $ (fromIntegral $ stopC - curC) / speed :: NominalDiffTime
                    estimatedDateOfFinish = utcToZonedTime tz $ addUTCTime estimatedTimeToFinish now
                    runReport = do
-                     liftIO $ putStrLn report
-                     return ((ssdCount ssd, now), i)
-                 in if reportNeeded then runReport else return ((prevC, prevTS), i)
+                     liftIO $ putChar '\r' >> putStr report
+                     return ((ssdCount ssd, now, length report), i)
+                 in if reportNeeded then runReport else return ((prevC, prevTS, prevRL), i)
 
 testNormDistSink :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => Bool -> a -> a -> Sink a m (DistributionTestResult a)
 testNormDistSink prnt alpha minDiff =    ssdConduit
