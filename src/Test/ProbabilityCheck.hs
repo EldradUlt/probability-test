@@ -58,13 +58,13 @@ printTestInfo = do
   startTime <- liftIO getCurrentTime
   liftIO $ threadDelay 10000 -- This prevents some printing collision issues but could slow things down if called a lot for some reason.
   liftIO $ putChar '\n'
-  void $ CL.mapAccumM (go startTime) (0, startTime, 0)
+  addCleanup (\_ -> liftIO $ putChar '\n') $ void $ CL.mapAccumM (go startTime) (0, startTime, 0)
     where go startTime i@(ssd, stopC) (prevC, prevTS, prevRL) =
             do now <- liftIO getCurrentTime
                tz <- liftIO $ getTimeZone now
                let reportNeeded = lastReportLongAgo || hitMilestone
                    lastReportLongAgo = diffUTCTime now prevTS > 1 -- It has been more than 1 second since the last report.
-                   hitMilestone = curC == 2 || curC >= stopC -- Probably want other stuff here.
+                   hitMilestone = curC >= stopC -- Might want other stuff here?
                    report = "Completed " ++ (show curC)
                             ++ "/" ++ (show $ stopC)
                             ++ " iter (" ++ (show $ div (100 * curC) stopC)
