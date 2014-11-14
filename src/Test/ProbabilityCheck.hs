@@ -5,6 +5,7 @@ module Test.ProbabilityCheck
        , wilcoxonSink, wilcoxonRankedPairsConduit
        , DistributionTestResult(..), DistributionTestValue(..), DistributionTestSummary(..), initDTS
        , updateSSD, ssdConduit
+       , MinDiff(..)
        ) where
 
 import Statistics.Test.Types (TestType(..))
@@ -44,6 +45,9 @@ data DistributionTestSummary a = DistributionTestSummary
                                  , dtsLowerBounds :: StreamStdDev a
                                  } deriving (Show, Eq)
 
+data MinDiff a = MDAbsolute a
+               | MDRelative a
+
 initDTS :: (Num a) => DistributionTestResult a -> DistributionTestSummary a
 initDTS (DistributionTestResult val mean stddev size upper lower) = 
   DistributionTestSummary (singleton val 1) (initSSD mean) (initSSD stddev) (initSSD $ fromIntegral size) (initSSD upper) (initSSD lower)
@@ -67,7 +71,7 @@ printTestInfo = do
                             ++ "%), at " ++ (show (round speed :: Integer)) -- This probably wants diff display.
                             ++ " iter/s, finish in " ++ (show (round estimatedTimeToFinish :: Integer)) -- Same
                             ++ " s (" ++ (show estimatedDateOfFinish) ++ ")."
-                            ++ " stddev = " ++ (show $ ssdStdDev ssd)
+                            -- ++ " stddev = " ++ (show $ ssdStdDev ssd)
                    --report = if length report' < prevRL then report' ++ (replicate (prevRL - (length report)) ' ') else report'
                    curC = ssdCount ssd
                    speed = (fromIntegral curC) / (realToFrac $ diffUTCTime now startTime) :: Double -- Don't care much about accuracy.
@@ -78,7 +82,8 @@ printTestInfo = do
                      return ((ssdCount ssd, now, length report), i)
                  in if reportNeeded then runReport else return ((prevC, prevTS, prevRL), i)
 
-testNormDistSink :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => Bool -> a -> a -> Sink a m (DistributionTestResult a)
+testNormDistSink :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m)
+                    => Bool -> a -> MinDiff a -> Sink a m (DistributionTestResult a)
 testNormDistSink prnt alpha minDiff =    ssdConduit
                                       =$ ssdToSSDandEnd alpha minDiff
                                       -- =$ conduitPrint
@@ -86,7 +91,7 @@ testNormDistSink prnt alpha minDiff =    ssdConduit
                                       =$ testNormDistSink' alpha
 
 ssdToSSDandEnd :: forall a b m. (InvErf a, RealFrac a, Ord a, Integral b, Monad m) =>
-                  a -> a -> Conduit (StreamStdDev a) m (StreamStdDev a, b)
+                  a -> MinDiff a -> Conduit (StreamStdDev a) m (StreamStdDev a, b)
 ssdToSSDandEnd alpha minDiff = awaitForever givePair
   where givePair :: StreamStdDev a -> Conduit (StreamStdDev a) m (StreamStdDev a, b)
         givePair ssd = yield (ssd, minSampleSize TwoTailed alpha minDiff $ (ssdStdDev ssd :: a))
@@ -119,14 +124,17 @@ testNormalDistribution alpha stdDev count actualDiff =
                                        , dtrSampleSize = fromIntegral count, dtrUpperBound = upperTest
                                        , dtrLowerBound = lowerTest}
 
-minSampleSize :: (InvErf a, RealFrac a, Integral b) => TestType -> a -> a -> a -> b
+minSampleSize :: (InvErf a, RealFrac a, Integral b) => TestType -> a -> MinDiff a -> a -> b
 minSampleSize testType = if testType == OneTailed then minSampleSizeOneTailed else minSampleSizeTwoTailed
 
--- Putting a hard limit of 20 here is just temporary to work around inaccuracy of estimating the 
-minSampleSizeOneTailed :: (InvErf a, RealFrac a, Integral b) => a -> a -> a -> b
-minSampleSizeOneTailed alpha minDiff stdDev = max 20 $ ceiling $ ((upperPerOfNormDist alpha) / (minDiff/stdDev))^(2::Integer)
+-- Putting a hard limit of 20 here is just temporary to work around inaccuracy of estimating the stdDev.
+minSampleSizeOneTailed :: (InvErf a, RealFrac a, Integral b) => a -> MinDiff a -> a -> b
+minSampleSizeOneTailed alpha minDiff stdDev = max 20 $ ceiling $ ((upperPerOfNormDist alpha) / mdOverSD)^(2::Integer)
+  where mdOverSD = case minDiff of
+          MDAbsolute md -> md / stdDev
+          MDRelative md -> md
 
-minSampleSizeTwoTailed :: (InvErf a, RealFrac a, Integral b) => a -> a -> a -> b
+minSampleSizeTwoTailed :: (InvErf a, RealFrac a, Integral b) => a -> MinDiff a -> a -> b
 minSampleSizeTwoTailed alpha = minSampleSizeOneTailed (alpha/2)
 
 upperPerOfNormDist :: (InvErf a) => a -> a
@@ -171,7 +179,7 @@ ssdConduit = do
         where updateSSDPair a s = (updateSSD a s, (updateSSD a s, a))
 
 wilcoxonSink :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => Int -> a -> a -> Sink (a,a) m (DistributionTestResult a)
-wilcoxonSink size alpha minDiff = wilcoxonRankedPairsConduit size =$ testNormDistSink True alpha minDiff
+wilcoxonSink size alpha minDiff = wilcoxonRankedPairsConduit size =$ testNormDistSink True alpha (MDRelative minDiff)
 
 wilcoxonRankedPairsConduit :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => Int -> Conduit (a,a) m a
 wilcoxonRankedPairsConduit size = {-    conduitPrint
