@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                probability-test
-version:             0.2.0.0
+version:             0.0.0.0
 -- synopsis:            
 -- description:         
 license:             BSD3
@@ -26,7 +26,7 @@ Test-Suite probability-test-tests
     , QuickCheck >=2.7 && <2.8
     , statistics >=0.11 && <0.12
     , tasty-hunit >=0.8 && <0.9
-    , tasty
+    , tasty == 0.10.*
     , approximate == 0.2.*
     , tasty-quickcheck == 0.8.*
     , log-domain >= 0.9.3
@@ -49,7 +49,7 @@ library
     , vector >=0.10 && <0.11
     , statistics >=0.11 && <0.12
     , tasty-hunit >=0.8 && <0.9
-    , tasty
+    , tasty == 0.10.*
     , math-functions == 0.1.5.*
     , approximate == 0.2.*
     , conduit == 1.1.*

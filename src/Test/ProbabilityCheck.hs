@@ -65,16 +65,16 @@ printTestInfo = do
                let reportNeeded = lastReportLongAgo || hitMilestone
                    lastReportLongAgo = diffUTCTime now prevTS > 1 -- It has been more than 1 second since the last report.
                    hitMilestone = curC >= stopC -- Might want other stuff here?
-                   report = "Completed " ++ (show curC)
-                            ++ "/" ++ (show $ stopC)
-                            ++ " iter (" ++ (show $ div (100 * curC) stopC)
-                            ++ "%), at " ++ (show (round speed :: Integer)) -- This probably wants diff display.
-                            ++ " iter/s, finish in " ++ (show (round estimatedTimeToFinish :: Integer)) -- Same
-                            ++ " s (" ++ (show estimatedDateOfFinish) ++ ")."
-                            -- ++ " stddev = " ++ (show $ ssdStdDev ssd)
-                   --report = if length report' < prevRL then report' ++ (replicate (prevRL - (length report)) ' ') else report'
+                   report' = "Completed " ++ (show curC)
+                             ++ "/" ++ (show $ stopC)
+                             ++ " iter (" ++ (show $ div (100 * curC) stopC)
+                             ++ "%), at " ++ (show (round speed :: Integer)) -- This probably wants diff display.
+                             ++ " iter/s, finish in " ++ (show (round estimatedTimeToFinish :: Integer)) -- Same
+                             ++ " s (" ++ (show estimatedDateOfFinish) ++ ")."
+                             -- ++ " stddev = " ++ (show $ ssdStdDev ssd)
+                   report = if length report' < prevRL then report' ++ (replicate (prevRL - (length report')) ' ') else report'
                    curC = ssdCount ssd
-                   speed = (fromIntegral curC) / (realToFrac $ diffUTCTime now startTime) :: Double -- Don't care much about accuracy.
+                   speed = (fromIntegral $ curC - prevC) / (realToFrac $ diffUTCTime now prevTS) :: Double
                    estimatedTimeToFinish = realToFrac $ (fromIntegral $ stopC - curC) / speed :: NominalDiffTime
                    estimatedDateOfFinish = utcToZonedTime tz $ addUTCTime estimatedTimeToFinish now
                    runReport = do
@@ -142,9 +142,9 @@ upperPerOfNormDist = invnormcdf . (1 - )
 
 -- This probably all wants to be moved to another file.
 data StreamStdDev a = StreamStdDev
-    { ssdCount :: Integer
-    , ssdMean :: a
-    , ssdS :: a
+    { ssdCount :: !Integer
+    , ssdMean :: !a
+    , ssdS :: !a
     }
     deriving (Eq)
 
