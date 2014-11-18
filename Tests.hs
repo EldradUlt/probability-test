@@ -45,20 +45,14 @@ main =
            else assertFailure (show dts)
     ]
   , testGroup "Tests for wilcoxon"
-    [ testCase "Simple valid null hypothesis." $ {-do
-         res <- tupleSource 0 0 $$ wilcoxonSink 0.01 0.05
-         assertFailure $ show res-}
+    [ testCase "Simple valid null hypothesis." $
       assertResHasVal TestZero $ tupleSource 0 0 $$ wilcoxonSink 40 0.05 0.15
-    , testCase "Simple invalid null hypothesis." $ {-do
-         res <- tupleSource 0 0.1 $$ wilcoxonSink 0.01 0.05
-         assertFailure $ show res-}
+    , testCase "Simple invalid null hypothesis." $
       assertResHasVal TestNegative $ tupleSource 0 0.1 $$ wilcoxonSink 40 0.05 0.15
     , testCase "Catching HLL error." $ do
       assertResHasVal TestZero
         $ (CL.unfoldM (\_ -> do
                           (pair, _) <- generate genHLLActualApprox
-                          --putStrLn $ (show $ fst pair) ++ ", " ++ (show $ HLL.size $ snd pair)
-                          --print lst
                           return $ Just (pair, ())) ())
         =$ CL.map (\(actual, hll) ->
                     let (Approximate conf lo _ hi) = HLL.size hll
@@ -72,10 +66,10 @@ data SignedLog a = SignedLog {
   , slLn :: Log a
   }
 
-instance (Show a, Floating a) => Show (SignedLog a) where
+instance (Show a, Floating a, Precise a, RealFloat a) => Show (SignedLog a) where
   show (SignedLog s a) = case s of
     S.Pos -> show a
-    S.Zero -> show (0 :: a)
+    S.Zero -> show (0 :: Log a)
     S.Neg -> S.symbol s ++ show a
 
 instance (Eq a) => Eq (SignedLog a) where

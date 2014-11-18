@@ -6,6 +6,7 @@ module Test.ProbabilityCheck
        , DistributionTestResult(..), DistributionTestValue(..), DistributionTestSummary(..), initDTS
        , updateSSD, ssdConduit
        , MinDiff(..)
+       , conduitPrint
        ) where
 
 import Statistics.Test.Types (TestType(..))
@@ -59,19 +60,18 @@ printTestInfo = do
   liftIO $ threadDelay 10000 -- This prevents some printing collision issues but could slow things down if called a lot for some reason.
   liftIO $ putChar '\n'
   addCleanup (\_ -> liftIO $ putChar '\n') $ void $ CL.mapAccumM (go startTime) (0, startTime, 0)
-    where go startTime i@(ssd, stopC) (prevC, prevTS, prevRL) =
+    where go _ i@(ssd, stopC) (prevC, prevTS, prevRL) =
             do now <- liftIO getCurrentTime
                tz <- liftIO $ getTimeZone now
                let reportNeeded = lastReportLongAgo || hitMilestone
                    lastReportLongAgo = diffUTCTime now prevTS > 1 -- It has been more than 1 second since the last report.
-                   hitMilestone = curC >= stopC -- Might want other stuff here?
+                   hitMilestone = curC >= stopC
                    report' = "Completed " ++ (show curC)
                              ++ "/" ++ (show $ stopC)
                              ++ " iter (" ++ (show $ div (100 * curC) stopC)
                              ++ "%), at " ++ (show (round speed :: Integer)) -- This probably wants diff display.
                              ++ " iter/s, finish in " ++ (show (round estimatedTimeToFinish :: Integer)) -- Same
                              ++ " s (" ++ (show estimatedDateOfFinish) ++ ")."
-                             -- ++ " stddev = " ++ (show $ ssdStdDev ssd)
                    report = if length report' < prevRL then report' ++ (replicate (prevRL - (length report')) ' ') else report'
                    curC = ssdCount ssd
                    speed = (fromIntegral $ curC - prevC) / (realToFrac $ diffUTCTime now prevTS) :: Double
@@ -86,7 +86,6 @@ testNormDistSink :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m)
                     => Bool -> a -> MinDiff a -> Sink a m (DistributionTestResult a)
 testNormDistSink prnt alpha minDiff =    ssdConduit
                                       =$ ssdToSSDandEnd alpha minDiff
-                                      -- =$ conduitPrint
                                       =$ (if prnt then printTestInfo else CL.map id)
                                       =$ testNormDistSink' alpha
 
@@ -127,7 +126,7 @@ testNormalDistribution alpha stdDev count actualDiff =
 minSampleSize :: (InvErf a, RealFrac a, Integral b) => TestType -> a -> MinDiff a -> a -> b
 minSampleSize testType = if testType == OneTailed then minSampleSizeOneTailed else minSampleSizeTwoTailed
 
--- Putting a hard limit of 20 here is just temporary to work around inaccuracy of estimating the stdDev.
+-- The hard coded minimum of 20 smaples is arbitrary. Should be thought about and justified.
 minSampleSizeOneTailed :: (InvErf a, RealFrac a, Integral b) => a -> MinDiff a -> a -> b
 minSampleSizeOneTailed alpha minDiff stdDev = max 20 $ ceiling $ ((upperPerOfNormDist alpha) / mdOverSD)^(2::Integer)
   where mdOverSD = case minDiff of
@@ -176,16 +175,15 @@ ssdConduit = do
     Just first -> do
       yield (initSSD first)
       void (CL.mapAccum updateSSDPair $ initSSD first) =$= CL.map fst
-        where updateSSDPair a s = (updateSSD a s, (updateSSD a s, a))
+        where updateSSDPair a s = (newSSD, (newSSD, a))
+                where newSSD = updateSSD a s
 
 wilcoxonSink :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => Int -> a -> a -> Sink (a,a) m (DistributionTestResult a)
 wilcoxonSink size alpha minDiff = wilcoxonRankedPairsConduit size =$ testNormDistSink True alpha (MDRelative minDiff)
 
 wilcoxonRankedPairsConduit :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => Int -> Conduit (a,a) m a
-wilcoxonRankedPairsConduit size = {-    conduitPrint
-                             =$=-} (CL.map $ uncurry (-))
-                             -- =$= conduitPrint
-                             =$= wilcoxonRankedConduit' size
+wilcoxonRankedPairsConduit size = (CL.map $ uncurry (-))
+                                  =$= wilcoxonRankedConduit' size
 
 conduitPrint :: (Show a, MonadIO m) => Conduit a m a
 conduitPrint = CL.mapM (\x -> do
@@ -195,7 +193,6 @@ conduitPrint = CL.mapM (\x -> do
 wilcoxonRankedConduit' :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => Int -> Conduit a m a
 wilcoxonRankedConduit' size = do
   lst <- CL.take size
-  --liftIO $ print lst
   if length lst == size then 
     let pLst = sort $ map (\a -> (abs a, signum a)) lst
         n = fromIntegral $ length pLst
@@ -208,7 +205,6 @@ wilcoxonRankedConduit' size = do
         testValue = t / (sqrt $ ((2*n*(n+1)*(2*n+1)) / 3) * (pPos + pNeg - ((pPos - pNeg)^(2::Integer))))
     in do
       yield testValue
-      -- liftIO $ print testValue
       wilcoxonRankedConduit' size
     else return ()
 
