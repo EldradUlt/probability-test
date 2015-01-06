@@ -34,7 +34,7 @@ Test-Suite probability-test-tests
     , conduit == 1.1.*
     , erf == 2.0.*
     , containers == 0.5.*
-    , hyperloglog
+    , hyperloglog == 0.3.*
     , reflection == 1.5.*
     , sign == 0.4.*
 
