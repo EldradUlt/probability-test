@@ -2,6 +2,7 @@
 module Main where
 
 import Test.ProbabilityCheck
+import Test.Tasty.ProbabilityCheck
 import Test.Tasty
 import Test.Tasty.HUnit
 import Data.Conduit (($$), Source, ZipSource(..), ($=), (=$))
@@ -58,6 +59,10 @@ main =
                     let (Approximate conf lo _ hi) = HLL.size hll
                     in (realToFrac conf, if lo <= actual && actual <= hi then 1 else 0) :: (SignedLog Double, SignedLog Double))
         $$ wilcoxonSink 10000 0.1 0.20
+    ]
+  , testGroup "Tests for testProbability"
+    [
+      testProbabilistic "Foobar" undefined
     ]
   ]
 
