@@ -62,7 +62,7 @@ main =
     ]
   , testGroup "Tests for testProbability"
     [
-      testProbabilistic "Foobar" undefined
+      testProbabilistic "Foobar" (undefined :: ProbabilisticTest IO Double)
     ]
   ]
 

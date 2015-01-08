@@ -18,7 +18,7 @@ cabal-version:       >=1.10
 Test-Suite probability-test-tests
   type:       exitcode-stdio-1.0
   default-language:    Haskell2010
-  Ghc-Options: -Wall -threaded -rtsopts -prof -auto-all -fprof-auto -caf-all
+  Ghc-Options: -Wall -threaded -rtsopts -auto-all -fprof-auto -caf-all
   main-is:    Tests.hs
   build-depends:
       probability-test
@@ -39,7 +39,7 @@ Test-Suite probability-test-tests
     , sign == 0.4.*
 
 library
-  exposed-modules:     Test.ProbabilityCheck
+  exposed-modules:     Test.ProbabilityCheck Test.Tasty.ProbabilityCheck
   -- other-modules:       
   other-extensions:    MultiParamTypeClasses, FlexibleInstances
   Ghc-Options: -Wall -threaded -rtsopts -auto-all -fprof-auto -caf-all

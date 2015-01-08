@@ -1,21 +1,36 @@
-{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts, ScopedTypeVariables #-}
+{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts, ScopedTypeVariables, FunctionalDependencies #-}
 
-module Test.Tasty.ProbabilistyCheck
+module Test.Tasty.ProbabilityCheck
        ( testProbabilistic
+       , ProbTestable(..)
+       , ProbabilisticTest(..)
        ) where
 
 import Test.Tasty (TestName, TestTree)
+import Test.Tasty.HUnit (testCase, Assertion)
 import Data.Number.Erf (InvErf)
+import Control.Monad.IO.Class (MonadIO)
+import Data.Conduit (Source, ($$))
 
 import Test.ProbabilityCheck
 
-testProbabilistic :: ProbTestable a => TestName -> a -> TestTree
-testProbabilistic testName testable = undefined
+testProbabilistic :: (ProbTestable p m a, InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => TestName -> p -> TestTree
+testProbabilistic testName p = testCase testName $ toAssertion $ (ptSample p) $$ testNormDistSink True (ptAlpha p) (ptMinDiff p)
 
-class ProbTestable prob where
+toAssertion :: (Show n) => IO (DistributionTestResult n) -> Assertion
+toAssertion resIO = undefined
+
+class ProbTestable prob m num | prob -> m num where
   ptSample :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => prob -> Source m a
   ptAlpha :: (InvErf a, RealFrac a, Ord a, Show a) => prob -> a
   ptMinDiff :: (InvErf a, RealFrac a, Ord a, Show a) => prob -> MinDiff a
+
+data ProbabilisticTest m a = Foobar (m a)
+
+instance (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => ProbTestable (ProbabilisticTest m a) m a where
+  ptSample = undefined
+  ptAlpha = undefined
+  ptMinDiff = undefined
 
 -- There wants to be a basic Data type similar to QuickCheck's Result
 -- which other instances of this use. However it'll need to have a
