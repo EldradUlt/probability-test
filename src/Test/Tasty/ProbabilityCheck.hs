@@ -17,10 +17,10 @@ import Test.ProbabilityCheck
 testProbabilistic :: (ProbTestable p m a, InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => TestName -> p -> TestTree
 testProbabilistic testName p = testCase testName $ toAssertion $ (ptSample p) $$ testNormDistSink True (ptAlpha p) (ptMinDiff p)
 
-toAssertion :: (Show n) => IO (DistributionTestResult n) -> Assertion
+toAssertion :: (Show n, MonadIO m) => m (DistributionTestResult n) -> Assertion
 toAssertion resIO = undefined
 
-class ProbTestable prob m num | prob -> m num where
+class ProbTestable prob m a | prob -> m a where
   ptSample :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => prob -> Source m a
   ptAlpha :: (InvErf a, RealFrac a, Ord a, Show a) => prob -> a
   ptMinDiff :: (InvErf a, RealFrac a, Ord a, Show a) => prob -> MinDiff a
