@@ -11,6 +11,7 @@ import Test.Tasty.HUnit (testCase, Assertion, assertFailure)
 import Data.Number.Erf (InvErf)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Conduit (Source, ($$))
+import qualified Data.Conduit.List as CL
 import Data.Maybe (fromMaybe)
 
 import Test.ProbabilityCheck
@@ -35,15 +36,22 @@ class ProbTestable prob m a | prob -> m a where
   ptPosFail :: prob -> DistributionTestResult a -> Maybe String
   ptToIO :: prob -> m x -> IO x
 
-data ProbabilisticTest m a = Foobar (m a)
+data ProbabilisticTest m a =
+  ProbabilisticTest
+  { ptS :: (m a)
+  , ptA :: a
+  , ptMD :: MinDiff a
+  , ptNF :: DistributionTestResult a -> Maybe String
+  , ptPF :: DistributionTestResult a -> Maybe String
+  }
 
-instance (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => ProbTestable (ProbabilisticTest m a) m a where
-  ptSample = undefined
-  ptAlpha = undefined
-  ptMinDiff = undefined
-  ptNegFail = undefined
-  ptPosFail = undefined
-  ptToIO = undefined
+instance (InvErf a, RealFrac a, Ord a, Show a) => ProbTestable (ProbabilisticTest IO a) IO a where
+  ptSample p = CL.unfoldM (\_ -> (ptS p) >>= (\a -> return $ Just (a,()))) ()
+  ptAlpha = ptA
+  ptMinDiff = ptMD
+  ptNegFail = ptNF
+  ptPosFail = ptPF
+  ptToIO _ = id
 
 -- There wants to be a basic Data type similar to QuickCheck's Result
 -- which other instances of this use. However it'll need to have a
