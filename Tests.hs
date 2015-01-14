@@ -3,8 +3,8 @@ module Main where
 
 import Test.ProbabilityCheck
 import Test.Tasty.ProbabilityCheck
-import Test.Tasty
-import Test.Tasty.HUnit
+import Test.Tasty (defaultMain, testGroup)
+import Test.Tasty.HUnit (HUnitFailure(..), Assertion, testCase, assertFailure)
 import Data.Conduit (($$), Source, ZipSource(..), ($=), (=$))
 import qualified Data.Conduit.List as CL
 import System.Random.MWC (withSystemRandom)
@@ -21,12 +21,14 @@ import Numeric.Log (Log(..), Precise)
 import Data.Number.Erf (InvErf(..))
 import qualified Data.Sign as S
 import Data.Ratio (numerator, denominator)
+import Control.Exception (try, SomeException)
+import Data.List (isPrefixOf)
 
 main :: IO ()
 main =
   defaultMain $
   testGroup "probability-test's Tests"
-  [ testGroup "Tests for testNormDistSink"
+  [ {-testGroup "Tests for testNormDistSink"
     [ testCase "Zero simple case" $ assertResHasVal TestZero $ zeroSource $$ testNormDistSink True 0.01 (MDAbsolute 0.01)
     , testCase "Positive simple case" $ assertResHasVal TestPositive $ oneTenthSource $$ testNormDistSink True 0.01 (MDAbsolute 0.01)
     , testCase "100 Samples null is true." $ do
@@ -60,9 +62,8 @@ main =
                     in (realToFrac conf, if lo <= actual && actual <= hi then 1 else 0) :: (SignedLog Double, SignedLog Double))
         $$ wilcoxonSink 10000 0.1 0.20
     ]
-  , testGroup "Tests for testProbability"
-    [
-      testProbabilistic "Simple testProbabilistic success."
+  , -}testGroup "Tests for testProbability"
+    [ testProbabilistic "Simple testProbabilistic success."
       (ProbabilisticTest {
           ptS = rIO 0
           , ptA = 0.05
@@ -71,6 +72,22 @@ main =
           , ptPF = (\dtr -> Just $ "Actual tested value was greater than expected value.\n" ++ show dtr)
           }
        )
+    , testCase "Simple testProbabilistic failure." $ do
+        e <- try (defaultMain $ testProbabilistic ""
+                  (ProbabilisticTest {
+                      ptS = rIO 0.1
+                      , ptA = 0.05
+                      , ptMD = MDAbsolute 0.05
+                      , ptNF = (\dtr -> Just $ "Actual tested value was less than expected value.\n" ++ show dtr)
+                      , ptPF = (\dtr -> Just $ "Actual tested value was greater than expected value.\n" ++ show dtr)
+                      }
+                  )
+                 ) :: IO (Either SomeException ())
+        case e of
+          Right _ -> assertFailure "Test should have failed but succeeded."
+          Left _ -> return () -- Really would prefer to check that it got the RIGHT error. But not sure how to do that with Tasty.
+          --Left (HUnitFailure s) -> if isPrefixOf "Actual tested value was greater than expected value." s then return ()
+                                   --else assertFailure $ "Failed for unexpected reason:\n" ++ s
     ]
   ]
 
