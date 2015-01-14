@@ -62,7 +62,15 @@ main =
     ]
   , testGroup "Tests for testProbability"
     [
-      testProbabilistic "Foobar" (undefined :: ProbabilisticTest IO Double)
+      testProbabilistic "Simple testProbabilistic success."
+      (ProbabilisticTest {
+          ptS = rIO 0
+          , ptA = 0.05
+          , ptMD = MDAbsolute 0.05
+          , ptNF = (\dtr -> Just $ "Actual tested value was less than expected value.\n" ++ show dtr)
+          , ptPF = (\dtr -> Just $ "Actual tested value was greater than expected value.\n" ++ show dtr)
+          }
+       )
     ]
   ]
 
@@ -182,10 +190,11 @@ tupleSource a b = getZipSource $ ZipSource ((normalDoubleSource a) $= CL.map (\x
 
 normalDoubleSource :: Double -> Source IO Double
 normalDoubleSource mean = CL.unfoldM (\_ -> do
-                                         r <- rIO
+                                         r <- rIO mean
                                          return $ Just (r, ())) ()
-  where rIO :: IO Double
-        rIO = withSystemRandom (\gen -> normal mean 1 gen :: IO Double)
+
+rIO :: Double -> IO Double
+rIO mean = withSystemRandom (\gen -> normal mean 1 gen :: IO Double)
 
 zeroSource :: Source IO Double
 zeroSource = normalDoubleSource 0
