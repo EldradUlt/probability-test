@@ -5,6 +5,7 @@ module Test.Tasty.ProbabilityCheck
        , ProbTestable(..)
        , ProbabilisticTest(..)
        , normDistToProbTestable
+       , pairsToProbTestable
        ) where
 
 import Test.Tasty (TestName, TestTree)
@@ -12,17 +13,30 @@ import Test.Tasty.HUnit (testCase, Assertion, assertFailure)
 import Test.QuickCheck (Gen, generate)
 import Data.Number.Erf (InvErf)
 import Control.Monad.IO.Class (MonadIO(..))
-import Data.Conduit (Source, ($$))
+import Data.Conduit (Source, ($$), ($=), transPipe)
 import qualified Data.Conduit.List as CL
 import Data.Maybe (fromMaybe)
 
 import Test.ProbabilityCheck
 
-normDistToProbTestable :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => a -> a -> m a -> ProbabilisticTest m a
+-- Tests true if the sample is a Normal distribution with a mean of 0.
+normDistToProbTestable :: (InvErf a, RealFrac a, Ord a, Show a, Monad m) => a -> a -> m a -> ProbabilisticTest m a
 normDistToProbTestable conf minDiff sample = ProbabilisticTest
-  { ptS = sample
+  { ptS = monadicToSource sample
   , ptA = conf
   , ptMD = MDAbsolute minDiff
+  , ptNF = valueHighMessage
+  , ptPF = valueLowMessage
+  }
+
+-- Test true if for each pair the values come from distributions with
+-- the same mean. Note the distributions are not contrained in any way
+-- and do not need to be the same between pairs.
+pairsToProbTestable :: (InvErf a, RealFrac a, Ord a, Show a, Integral b, Monad m) => a -> b -> m (a,a) -> ProbabilisticTest m a
+pairsToProbTestable conf size sample = ProbabilisticTest
+  { ptS = (monadicToSource sample) $= wilcoxonRankedPairsConduit (fromIntegral size)
+  , ptA = conf
+  , ptMD = MDRelative 0.15 --This value is hardcoded for the moment. But should be calculated from the Confidence.
   , ptNF = valueHighMessage
   , ptPF = valueLowMessage
   }
@@ -36,7 +50,7 @@ valueLowMessage dtr = Just $ "Actual tested value was less than expected value.\
 testProbabilistic :: (ProbTestable p m a, InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => TestName -> p -> TestTree
 testProbabilistic testName p = testCase testName $ (toAssertion p) $ (ptSample p) $$ testNormDistSink True (ptAlpha p) (ptMinDiff p)
 
-toAssertion :: (ProbTestable p m a, Show a, MonadIO m) => p -> m (DistributionTestResult a) -> Assertion
+toAssertion :: (ProbTestable p m a, Show a) => p -> m (DistributionTestResult a) -> Assertion
 toAssertion p resIO = do
   res <- ptToIO p resIO
   case dtrValue res of
@@ -55,7 +69,7 @@ class ProbTestable prob m a | prob -> m a where
 
 data ProbabilisticTest m a =
   ProbabilisticTest
-  { ptS :: (m a)
+  { ptS :: Source m a
   , ptA :: a
   , ptMD :: MinDiff a
   , ptNF :: DistributionTestResult a -> Maybe String
@@ -66,7 +80,7 @@ monadicToSource :: (Monad m) => m a -> Source m a
 monadicToSource ma = CL.unfoldM (\_ -> ma >>= (\a -> return $ Just (a,()))) ()
 
 instance (InvErf a, RealFrac a, Ord a, Show a) => ProbTestable (ProbabilisticTest IO a) IO a where
-  ptSample p = monadicToSource $ ptS p
+  ptSample p = ptS p
   ptAlpha = ptA
   ptMinDiff = ptMD
   ptNegFail = ptNF
@@ -74,7 +88,7 @@ instance (InvErf a, RealFrac a, Ord a, Show a) => ProbTestable (ProbabilisticTes
   ptToIO _ = id
 
 instance (InvErf a, RealFrac a, Ord a, Show a) => ProbTestable (ProbabilisticTest Gen a) IO a where
-  ptSample p = monadicToSource $ generate $ ptS p
+  ptSample p = transPipe generate $ ptS p
   ptAlpha = ptA
   ptMinDiff = ptMD
   ptNegFail = ptNF

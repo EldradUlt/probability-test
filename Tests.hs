@@ -15,7 +15,7 @@ import qualified Data.HyperLogLog as HLL
 import Data.Reflection (nat)
 import Data.Approximate (Approximate(..))
 import Data.List (nub)
-import Test.QuickCheck (Gen, arbitrary, generate)
+import Test.QuickCheck (Gen, arbitrary, generate, choose, elements)
 import Data.Monoid (mempty)
 import Numeric.Log (Log(..), Precise)
 import Data.Number.Erf (InvErf(..))
@@ -65,7 +65,7 @@ main =
   , -}testGroup "Tests for testProbability"
     [ testProbabilistic "Simple testProbabilistic success."
       (ProbabilisticTest {
-          ptS = rIO 0
+          ptS =  CL.unfoldM (\_ -> (rIO 0) >>= (\a -> return $ Just (a,()))) ()
           , ptA = 0.05
           , ptMD = MDAbsolute 0.05
           , ptNF = (\dtr -> Just $ "Actual tested value was less than expected value.\n" ++ show dtr)
@@ -75,7 +75,7 @@ main =
     , testCase "Simple testProbabilistic failure." $ do
         e <- try (defaultMain $ testProbabilistic "" --Should make this quiet so that it doesn't print the confusing failure.
                   (ProbabilisticTest {
-                      ptS = rIO 0.1
+                      ptS = CL.unfoldM (\_ -> (rIO 0.1) >>= (\a -> return $ Just (a,()))) ()
                       , ptA = 0.05
                       , ptMD = MDAbsolute 0.05
                       , ptNF = (\dtr -> Just $ "Actual tested value was less than expected value.\n" ++ show dtr)
@@ -89,6 +89,9 @@ main =
           --Left (HUnitFailure s) -> if isPrefixOf "Actual tested value was greater than expected value." s then return ()
                                    --else assertFailure $ "Failed for unexpected reason:\n" ++ s
     , testProbabilistic "normDistToProbTestable test." $ normDistToProbTestable 0.05 0.05 (rIO 0)
+    , testProbabilistic "pairsToProbTestable IO test."
+      $ pairsToProbTestable 0.05 (40::Integer) (rIO 0 >>= (\r1-> rIO 0 >>= (\r2-> return (r1, r2))))
+    , testProbabilistic "pairsToProbTestable test." $ pairsToProbTestable 0.05 (40::Integer) (pIO 0 0)
     ]
   ]
 
@@ -213,6 +216,12 @@ normalDoubleSource mean = CL.unfoldM (\_ -> do
 
 rIO :: Double -> IO Double
 rIO mean = withSystemRandom (\gen -> normal mean 1 gen :: IO Double)
+
+pIO :: Double -> Double -> Gen (Double, Double)
+pIO meanA meanB = do
+  a <- elements [meanA-1, meanA+1] -- Binary distribution containing points of meanA +/- 1.
+  b <- choose (meanB-1,meanB+1) -- Uniform distribution over meanB +/- 1.
+  return (a, b)
 
 zeroSource :: Source IO Double
 zeroSource = normalDoubleSource 0

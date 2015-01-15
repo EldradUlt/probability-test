@@ -181,7 +181,7 @@ ssdConduit = do
 wilcoxonSink :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => Int -> a -> a -> Sink (a,a) m (DistributionTestResult a)
 wilcoxonSink size alpha minDiff = wilcoxonRankedPairsConduit size =$ testNormDistSink True alpha (MDRelative minDiff)
 
-wilcoxonRankedPairsConduit :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => Int -> Conduit (a,a) m a
+wilcoxonRankedPairsConduit :: (InvErf a, RealFrac a, Ord a, Show a, Monad m) => Int -> Conduit (a,a) m a
 wilcoxonRankedPairsConduit size = (CL.map $ uncurry (-))
                                   =$= wilcoxonRankedConduit' size
 
@@ -190,7 +190,7 @@ conduitPrint = CL.mapM (\x -> do
                            liftIO (print x) 
                            return x)
 
-wilcoxonRankedConduit' :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => Int -> Conduit a m a
+wilcoxonRankedConduit' :: (InvErf a, RealFrac a, Ord a, Show a, Monad m) => Int -> Conduit a m a
 wilcoxonRankedConduit' size = do
   lst <- CL.take size
   if length lst == size then 
