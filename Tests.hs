@@ -4,7 +4,7 @@ module Main where
 import Test.ProbabilityCheck
 import Test.Tasty.ProbabilityCheck
 import Test.Tasty (defaultMain, testGroup)
-import Test.Tasty.HUnit (HUnitFailure(..), Assertion, testCase, assertFailure)
+import Test.Tasty.HUnit (Assertion, testCase, assertFailure)
 import Data.Conduit (($$), Source, ZipSource(..), ($=), (=$))
 import qualified Data.Conduit.List as CL
 import System.Random.MWC (withSystemRandom)
@@ -22,13 +22,12 @@ import Data.Number.Erf (InvErf(..))
 import qualified Data.Sign as S
 import Data.Ratio (numerator, denominator)
 import Control.Exception (try, SomeException)
-import Data.List (isPrefixOf)
 
 main :: IO ()
 main =
   defaultMain $
   testGroup "probability-test's Tests"
-  [ {-testGroup "Tests for testNormDistSink"
+  [ testGroup "Tests for testNormDistSink"
     [ testCase "Zero simple case" $ assertResHasVal TestZero $ zeroSource $$ testNormDistSink True 0.01 (MDAbsolute 0.01)
     , testCase "Positive simple case" $ assertResHasVal TestPositive $ oneTenthSource $$ testNormDistSink True 0.01 (MDAbsolute 0.01)
     , testCase "100 Samples null is true." $ do
@@ -62,7 +61,7 @@ main =
                     in (realToFrac conf, if lo <= actual && actual <= hi then 1 else 0) :: (SignedLog Double, SignedLog Double))
         $$ wilcoxonSink 10000 0.1 0.20
     ]
-  , -}testGroup "Tests for testProbability"
+  , testGroup "Tests for testProbability"
     [ testProbabilistic "Simple testProbabilistic success."
       (ProbabilisticTest {
           ptS =  CL.unfoldM (\_ -> (rIO 0) >>= (\a -> return $ Just (a,()))) ()
