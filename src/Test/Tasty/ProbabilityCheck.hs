@@ -4,6 +4,7 @@ module Test.Tasty.ProbabilityCheck
        ( testProbabilistic
        , ProbTestable(..)
        , ProbabilisticTest(..)
+       , normDistToProbTestable
        ) where
 
 import Test.Tasty (TestName, TestTree)
@@ -16,6 +17,21 @@ import qualified Data.Conduit.List as CL
 import Data.Maybe (fromMaybe)
 
 import Test.ProbabilityCheck
+
+normDistToProbTestable :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => a -> a -> m a -> ProbabilisticTest m a
+normDistToProbTestable conf minDiff sample = ProbabilisticTest
+  { ptS = sample
+  , ptA = conf
+  , ptMD = MDAbsolute minDiff
+  , ptNF = valueHighMessage
+  , ptPF = valueLowMessage
+  }
+
+valueHighMessage :: (Show a) => DistributionTestResult a -> Maybe String
+valueHighMessage dtr = Just $ "Actual tested value was less than expected value.\n" ++ show dtr
+
+valueLowMessage :: (Show a) => DistributionTestResult a -> Maybe String
+valueLowMessage dtr = Just $ "Actual tested value was less than expected value.\n" ++ show dtr
 
 testProbabilistic :: (ProbTestable p m a, InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => TestName -> p -> TestTree
 testProbabilistic testName p = testCase testName $ (toAssertion p) $ (ptSample p) $$ testNormDistSink True (ptAlpha p) (ptMinDiff p)
@@ -30,7 +46,7 @@ toAssertion p resIO = do
     TestInsufficientSample -> assertFailure $ "Test unable to get sufficient samples.\n" ++ (show res)
 
 class ProbTestable prob m a | prob -> m a where
-  ptSample :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => prob -> Source m a
+  ptSample :: (InvErf a, RealFrac a, Ord a, Show a) => prob -> Source m a
   ptAlpha :: (InvErf a, RealFrac a, Ord a, Show a) => prob -> a
   ptMinDiff :: (InvErf a, RealFrac a, Ord a, Show a) => prob -> MinDiff a
   ptNegFail :: prob -> DistributionTestResult a -> Maybe String
@@ -57,13 +73,13 @@ instance (InvErf a, RealFrac a, Ord a, Show a) => ProbTestable (ProbabilisticTes
   ptPosFail = ptPF
   ptToIO _ = id
 
-instance (InvErf a, RealFrac a, Ord a, Show a) => ProbTestable (ProbabilisticTest Gen a) Gen a where
-  ptSample p = monadicToSource $ ptS p
+instance (InvErf a, RealFrac a, Ord a, Show a) => ProbTestable (ProbabilisticTest Gen a) IO a where
+  ptSample p = monadicToSource $ generate $ ptS p
   ptAlpha = ptA
   ptMinDiff = ptMD
   ptNegFail = ptNF
   ptPosFail = ptPF
-  ptToIO _ = generate
+  ptToIO _ = id
 
 -- There wants to be a basic Data type similar to QuickCheck's Result
 -- which other instances of this use. However it'll need to have a

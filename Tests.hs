@@ -73,7 +73,7 @@ main =
           }
        )
     , testCase "Simple testProbabilistic failure." $ do
-        e <- try (defaultMain $ testProbabilistic ""
+        e <- try (defaultMain $ testProbabilistic "" --Should make this quiet so that it doesn't print the confusing failure.
                   (ProbabilisticTest {
                       ptS = rIO 0.1
                       , ptA = 0.05
@@ -85,9 +85,10 @@ main =
                  ) :: IO (Either SomeException ())
         case e of
           Right _ -> assertFailure "Test should have failed but succeeded."
-          Left _ -> return () -- Really would prefer to check that it got the RIGHT error. But not sure how to do that with Tasty.
+          Left _ -> return () -- Really would prefer to check that it got the RIGHT failure, but not sure how to do that with Tasty.
           --Left (HUnitFailure s) -> if isPrefixOf "Actual tested value was greater than expected value." s then return ()
                                    --else assertFailure $ "Failed for unexpected reason:\n" ++ s
+    , testProbabilistic "normDistToProbTestable test." $ normDistToProbTestable 0.05 0.05 (rIO 0)
     ]
   ]
 
