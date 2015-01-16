@@ -27,7 +27,7 @@ main :: IO ()
 main =
   defaultMain $
   testGroup "probability-test's Tests"
-  [ testGroup "Tests for testNormDistSink"
+  [ {-testGroup "Tests for testNormDistSink"
     [ testCase "Zero simple case" $ assertResHasVal TestZero $ zeroSource $$ testNormDistSink True 0.01 (MDAbsolute 0.01)
     , testCase "Positive simple case" $ assertResHasVal TestPositive $ oneTenthSource $$ testNormDistSink True 0.01 (MDAbsolute 0.01)
     , testCase "100 Samples null is true." $ do
@@ -61,7 +61,7 @@ main =
                     in (realToFrac conf, if lo <= actual && actual <= hi then 1 else 0) :: (SignedLog Double, SignedLog Double))
         $$ wilcoxonSink 10000 0.1 0.20
     ]
-  , testGroup "Tests for testProbability"
+  , -}testGroup "Tests for testProbability"
     [ testProbabilistic "Simple testProbabilistic success."
       (ProbabilisticTest {
           ptS =  CL.unfoldM (\_ -> (rIO 0) >>= (\a -> return $ Just (a,()))) ()
@@ -91,6 +91,7 @@ main =
     , testProbabilistic "pairsToProbTestable IO test."
       $ pairsToProbTestable 0.05 (40::Integer) (rIO 0 >>= (\r1-> rIO 0 >>= (\r2-> return (r1, r2))))
     , testProbabilistic "pairsToProbTestable test." $ pairsToProbTestable 0.05 (40::Integer) (pIO 0 0)
+    , testProbabilistic "HLL test with testProbabilistic." $ pairsToProbTestable 0.05 (40::Integer) genHLLConfCorrect
     ]
   ]
 
@@ -186,6 +187,12 @@ instance (InvErf a, Precise a, RealFloat a) => InvErf (SignedLog a) where
 -- This wants to be replaced with a more accurate instance.
 instance (RealFrac a, Precise a, RealFloat a) => RealFrac (Log a) where
   properFraction l = (\(b,a) -> (b, realToFrac a)) $ properFraction $ exp (ln l)
+
+genHLLConfCorrect :: Gen (SignedLog Double, SignedLog Double)
+genHLLConfCorrect = do
+  ((actual, hll), _) <- genHLLActualApprox
+  let (Approximate conf lo _ hi) = HLL.size hll
+  return (realToFrac conf, if lo <= actual && actual <= hi then 1 else 0)
 
 genHLLActualApprox :: (Num a) => Gen ((a, HLL.HyperLogLog $(nat 5)), [Integer])
 genHLLActualApprox = do
