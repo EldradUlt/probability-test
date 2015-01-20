@@ -19,8 +19,18 @@ import Data.Maybe (fromMaybe)
 
 import Test.ProbabilityCheck
 
--- Tests true if the sample is a Normal distribution with a mean of 0.
-normDistToProbTestable :: (InvErf a, RealFrac a, Ord a, Show a, Monad m) => a -> a -> m a -> ProbabilisticTest m a
+-- | Creates a ProbabilisticTest for testing whether the given sample
+-- is a Normal Distribution with a mean of zero.
+--
+-- /Bug/: #1 Test result actually has a lower confidence and a larger
+-- minimal difference than the values given.
+normDistToProbTestable ::
+  (InvErf a, RealFrac a, Ord a, Show a, Monad m)
+  => a -- ^ Desired confidence of test's accuracy. (Bug #1)
+  -> a -- ^ Desired minimal difference from zero for mean to be
+       -- considered not zero. (Bug #1)
+  -> m a -- ^ Monadic sample to be tested. Should be indepent.
+  -> ProbabilisticTest m a -- ^ Result to pass to testProbabilistic.
 normDistToProbTestable conf minDiff sample = ProbabilisticTest
   { ptS = monadicToSource sample
   , ptA = conf
