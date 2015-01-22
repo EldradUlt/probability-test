@@ -19,17 +19,18 @@ import Data.Maybe (fromMaybe)
 
 import Test.ProbabilityCheck
 
--- | Creates a ProbabilisticTest for testing whether the given sample
--- is a Normal Distribution with a mean of zero.
+-- | Creates a ProbabilisticTest which when passed to
+-- testProbabilistic tests whether the given sample is a Normal
+-- Distribution with a mean of zero.
 --
 -- /Bug/: #1 Test result actually has a lower confidence and a larger
 -- minimal difference than the values given.
-normDistToProbTestable ::
-  (InvErf a, RealFrac a, Ord a, Show a, Monad m)
+normDistToProbTestable
+  :: (InvErf a, RealFrac a, Ord a, Show a, Monad m)
   => a -- ^ Desired confidence of test's accuracy. (Bug #1)
   -> a -- ^ Desired minimal difference from zero for mean to be
        -- considered not zero. (Bug #1)
-  -> m a -- ^ Monadic sample to be tested. Should be indepent.
+  -> m a -- ^ Monadic sample to be tested. Must produce independant values.
   -> ProbabilisticTest m a -- ^ Result to pass to testProbabilistic.
 normDistToProbTestable conf minDiff sample = ProbabilisticTest
   { ptS = monadicToSource sample
@@ -39,10 +40,25 @@ normDistToProbTestable conf minDiff sample = ProbabilisticTest
   , ptPF = valueLowMessage
   }
 
--- Test true if for each pair the values come from distributions with
--- the same mean. Note the distributions are not contrained in any way
--- and do not need to be the same between pairs.
-pairsToProbTestable :: (InvErf a, RealFrac a, Ord a, Show a, Integral b, Monad m) => a -> b -> m (a,a) -> ProbabilisticTest m a
+-- | Creates a ProbabilisticTest which when passed to
+-- testProbabilistic tests whether each pair of values comes from
+-- distributions with the same mean. Note the distributions are not
+-- constrained in any way and do not need to be the same across
+-- different pairs.
+--
+-- /Bug/: #1 & #15 Test result actually has a lower confidence than the
+-- value given.
+--
+-- /Bug/: #4 Currently produces an error if the difference between the
+-- two values is the same for an entire window of the given size.
+--
+-- /Note/: #14 The window size should be calculated not user defined.
+pairsToProbTestable
+  :: (InvErf a, RealFrac a, Ord a, Show a, Integral b, Monad m)
+  => a -- ^ Desired confidence of test's accuracy (Bug #1)
+  -> b -- ^ Window size to use for Wilcoxon. (Bug #4, Note #14)
+  -> m (a,a) -- ^ Monadic sample to be tested. Must produce independant values.
+  -> ProbabilisticTest m a -- ^ Result to pass to testProbabilistic.
 pairsToProbTestable conf size sample = ProbabilisticTest
   { ptS = (monadicToSource sample) $= wilcoxonRankedPairsConduit (fromIntegral size)
   , ptA = conf
@@ -57,7 +73,11 @@ valueHighMessage dtr = Just $ "Actual tested value was less than expected value.
 valueLowMessage :: (Show a) => DistributionTestResult a -> Maybe String
 valueLowMessage dtr = Just $ "Actual tested value was less than expected value.\n" ++ show dtr
 
-testProbabilistic :: (ProbTestable p m a, InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => TestName -> p -> TestTree
+-- | Create a Test for a ProbabilityCheck ProbTestable test.
+testProbabilistic :: (ProbTestable p m a, InvErf a, RealFrac a, Ord a, Show a, MonadIO m)
+                     => TestName -- ^ Name of test.
+                     -> p -- ^ Instance of ProbTestable to use for test.
+                     -> TestTree -- ^ Resulting test.
 testProbabilistic testName p = testCase testName $ (toAssertion p) $ (ptSample p) $$ testNormDistSink True (ptAlpha p) (ptMinDiff p)
 
 toAssertion :: (ProbTestable p m a, Show a) => p -> m (DistributionTestResult a) -> Assertion
