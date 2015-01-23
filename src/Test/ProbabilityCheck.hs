@@ -101,6 +101,10 @@ printTestInfo = do
 -- TestPositive/TestNegative result will occur more often than the
 -- desired confidence.
 --
+-- If the Source is a Normal Distribution with a mean strictly between
+-- +/- the specified minimal difference, but not zero then there are
+-- no guarantees of the results.
+--
 -- If the Source is not a Normal Distribution there are no guarantees
 -- of the results.
 --
