@@ -62,11 +62,12 @@ pairsToProbTestable
 pairsToProbTestable conf size sample = ProbabilisticTest
   { ptS = (monadicToSource sample) $= wilcoxonRankedPairsConduit (fromIntegral size)
   , ptA = conf
-  , ptMD = MDRelative 0.15 --This value is hardcoded for the moment. But should be calculated from the Confidence.
+  , ptMD = MDRelative 0.15 -- Bug #15
   , ptNF = valueHighMessage
   , ptPF = valueLowMessage
   }
 
+-- Default failure message when 
 valueHighMessage :: (Show a) => DistributionTestResult a -> Maybe String
 valueHighMessage dtr = Just $ "Actual tested value was less than expected value.\n" ++ show dtr
 
@@ -80,6 +81,9 @@ testProbabilistic :: (ProbTestable p m a, InvErf a, RealFrac a, Ord a, Show a, M
                      -> TestTree -- ^ Resulting test.
 testProbabilistic testName p = testCase testName $ (toAssertion p) $ (ptSample p) $$ testNormDistSink True (ptAlpha p) (ptMinDiff p)
 
+-- Helper function which uses the configuration values of a
+-- ProbTestable to turn a DistributionTestResult into a
+-- Test.HUnit.Assertion.
 toAssertion :: (ProbTestable p m a, Show a) => p -> m (DistributionTestResult a) -> Assertion
 toAssertion p resIO = do
   res <- ptToIO p resIO
@@ -89,6 +93,12 @@ toAssertion p resIO = do
     TestPositive -> fromMaybe (return ()) ((ptPosFail p res) >>= (return . assertFailure))
     TestInsufficientSample -> assertFailure $ "Test unable to get sufficient samples.\n" ++ (show res)
 
+-- | Instantiations of this class contain both the sampling method to
+-- be tested as well as a bunch of configuration options. This is
+-- probably a mistake and should be rewritten in a more user friendly
+-- fashion.
+--
+-- Will document more if not replaced soon.
 class ProbTestable prob m a | prob -> m a where
   ptSample :: (InvErf a, RealFrac a, Ord a, Show a) => prob -> Source m a
   ptAlpha :: (InvErf a, RealFrac a, Ord a, Show a) => prob -> a
@@ -97,6 +107,10 @@ class ProbTestable prob m a | prob -> m a where
   ptPosFail :: prob -> DistributionTestResult a -> Maybe String
   ptToIO :: prob -> m x -> IO x
 
+-- | This is a data type which is a straight forward instantiation of
+-- the ProbTestable class.
+--
+-- Will document more if not replaced soon.
 data ProbabilisticTest m a =
   ProbabilisticTest
   { ptS :: Source m a
@@ -106,6 +120,8 @@ data ProbabilisticTest m a =
   , ptPF :: DistributionTestResult a -> Maybe String
   }
 
+-- Helper function which turns a monadic value into a
+-- Data.Conduit.Source of those values.
 monadicToSource :: (Monad m) => m a -> Source m a
 monadicToSource ma = CL.unfoldM (\_ -> ma >>= (\a -> return $ Just (a,()))) ()
 
@@ -124,10 +140,3 @@ instance (InvErf a, RealFrac a, Ord a, Show a) => ProbTestable (ProbabilisticTes
   ptNegFail = ptNF
   ptPosFail = ptPF
   ptToIO _ = id
-
--- There wants to be a basic Data type similar to QuickCheck's Result
--- which other instances of this use. However it'll need to have a
--- numeric type due to the non-binary nature of the results.
-
--- Eventually want to add in proper error handling similar to
--- QuickCheck's RoseResult though for the moment skipping.
