@@ -104,10 +104,10 @@ printTestInfo = do
 -- If the Source is not a Normal Distribution there are no guarantees
 -- of the results.
 --
--- \Bug\: #1 Test result actually has a lower confidence and a larger
+-- /Bug/: #1 Test result actually has a lower confidence and a larger
 -- minimal difference than the values given.
 --
--- \Bug\: #5 There's a mild performance and reporting bug in the
+-- /Bug/: #5 There's a mild performance and reporting bug in the
 -- printing which may cause race conditions where printing of the
 -- test's name is interwoven with updates of the running
 -- test. Additionally the fix in place to make that unlikely will
