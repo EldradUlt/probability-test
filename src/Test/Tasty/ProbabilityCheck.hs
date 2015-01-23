@@ -27,14 +27,15 @@ import Test.ProbabilityCheck
 -- minimal difference than the values given.
 normDistToProbTestable
   :: (InvErf a, RealFrac a, Ord a, Show a, Monad m)
-  => a -- ^ Desired confidence of test's accuracy. (Bug #1)
+  => a -- ^ This is 1 minus the desired confidence, which is to say
+       -- the allowable inaccuracy rate. E.g. 0.05. (Bug #1)
   -> a -- ^ Desired minimal difference from zero for mean to be
        -- considered not zero. (Bug #1)
   -> m a -- ^ Monadic sample to be tested. Must produce independant values.
   -> ProbabilisticTest m a -- ^ Result to pass to testProbabilistic.
-normDistToProbTestable conf minDiff sample = ProbabilisticTest
+normDistToProbTestable alpha minDiff sample = ProbabilisticTest
   { ptS = monadicToSource sample
-  , ptA = conf
+  , ptA = alpha
   , ptMD = MDAbsolute minDiff
   , ptNF = valueHighMessage
   , ptPF = valueLowMessage
@@ -55,13 +56,14 @@ normDistToProbTestable conf minDiff sample = ProbabilisticTest
 -- /Note/: #14 The window size should be calculated not user defined.
 pairsToProbTestable
   :: (InvErf a, RealFrac a, Ord a, Show a, Integral b, Monad m)
-  => a -- ^ Desired confidence of test's accuracy (Bug #1)
+  => a -- ^ This is 1 minus the desired confidence, which is to say
+       -- the allowable inaccuracy rate. E.g. 0.05. (Bug #1)
   -> b -- ^ Window size to use for Wilcoxon. (Bug #4, Note #14)
   -> m (a,a) -- ^ Monadic sample to be tested. Must produce independant values.
   -> ProbabilisticTest m a -- ^ Result to pass to testProbabilistic.
-pairsToProbTestable conf size sample = ProbabilisticTest
+pairsToProbTestable alpha size sample = ProbabilisticTest
   { ptS = (monadicToSource sample) $= wilcoxonRankedPairsConduit (fromIntegral size)
-  , ptA = conf
+  , ptA = alpha
   , ptMD = MDRelative 0.15 -- Bug #15
   , ptNF = valueHighMessage
   , ptPF = valueLowMessage

@@ -82,8 +82,42 @@ printTestInfo = do
                      return ((ssdCount ssd, now, length report), i)
                  in if reportNeeded then runReport else return ((prevC, prevTS, prevRL), i)
 
-testNormDistSink :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m)
-                    => Bool -> a -> MinDiff a -> Sink a m (DistributionTestResult a)
+-- | Creates a Sink which when fused with a Source with the given
+-- properties will return a DistributionTestResult whose dtsValue is
+-- a particular value the given percentage of the time:
+-- 
+-- If the Source closes before enough samples have been taken the
+-- resulting value will be TestInsufficientSample.
+--
+-- If the Source is a Normal Distribution with a mean of zero then the
+-- resulting value will be TestZero the desired confidence
+-- percentage of the time.
+--
+-- If the Source is a Normal Distribution with a mean of +/- the
+-- specified minimal difference then the resulting value will be
+-- TestPositive/TestNegative the desired confidence percentage of the
+-- time. If absolute value of the Source's mean is greater than the
+-- specified minimal difference then the applicable
+-- TestPositive/TestNegative result will occur more often than the
+-- desired confidence.
+--
+-- If the Source is not a Normal Distribution there are no guarantees
+-- of the results.
+--
+-- \Bug\: #1 Test result actually has a lower confidence and a larger
+-- minimal difference than the values given.
+--
+-- \Bug\: #5 There's a mild performance and reporting bug in the
+-- printing which may cause race conditions where printing of the
+-- test's name is interwoven with updates of the running
+-- test. Additionally the fix in place to make that unlikely will
+-- cause a performance hit when large numbers of small tests are run.
+testNormDistSink ::
+  (InvErf a, RealFrac a, Ord a, Show a, MonadIO m)
+  => Bool -- ^ Whether to print updates as test is running. (Bug #5)
+  -> a -- ^ This is 1 minus the desired confidence, which is to say the allowable inaccuracy rate. E.g. 0.05. (Bug #1)
+  -> MinDiff a -- ^ Minimal difference to be considered different. (Bug #1)
+  -> Sink a m (DistributionTestResult a)
 testNormDistSink prnt alpha minDiff =    ssdConduit
                                       =$ ssdToSSDandEnd alpha minDiff
                                       =$ (if prnt then printTestInfo else CL.map id)
@@ -185,6 +219,8 @@ wilcoxonRankedPairsConduit :: (InvErf a, RealFrac a, Ord a, Show a, Monad m) => 
 wilcoxonRankedPairsConduit size = (CL.map $ uncurry (-))
                                   =$= wilcoxonRankedConduit' size
 
+-- | Debugging helper function which is currently not used and should
+-- probably be removed.
 conduitPrint :: (Show a, MonadIO m) => Conduit a m a
 conduitPrint = CL.mapM (\x -> do
                            liftIO (print x) 

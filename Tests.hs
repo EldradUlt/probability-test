@@ -27,7 +27,7 @@ main :: IO ()
 main =
   defaultMain $
   testGroup "probability-test's Tests"
-  [ {-testGroup "Tests for testNormDistSink"
+  [ testGroup "Tests for testNormDistSink"
     [ testCase "Zero simple case" $ assertResHasVal TestZero $ zeroSource $$ testNormDistSink True 0.01 (MDAbsolute 0.01)
     , testCase "Positive simple case" $ assertResHasVal TestPositive $ oneTenthSource $$ testNormDistSink True 0.01 (MDAbsolute 0.01)
     , testCase "100 Samples null is true." $ do
@@ -61,7 +61,7 @@ main =
                     in (realToFrac conf, if lo <= actual && actual <= hi then 1 else 0) :: (SignedLog Double, SignedLog Double))
         $$ wilcoxonSink 10000 0.1 0.20
     ]
-  , -}testGroup "Tests for testProbability"
+  , testGroup "Tests for testProbability"
     [ testProbabilistic "Simple testProbabilistic success."
       (ProbabilisticTest {
           ptS =  CL.unfoldM (\_ -> (rIO 0) >>= (\a -> return $ Just (a,()))) ()
