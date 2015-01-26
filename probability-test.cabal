@@ -29,14 +29,12 @@ Test-Suite probability-test-tests
     , tasty == 0.10.*
     , approximate == 0.2.*
     , tasty-quickcheck == 0.8.*
-    , log-domain >= 0.9.3
     , mwc-random == 0.13.*
     , conduit == 1.1.*
     , erf == 2.0.*
     , containers == 0.5.*
     , hyperloglog == 0.3.*
     , reflection == 1.5.*
-    , sign == 0.4.*
 
 library
   exposed-modules:     Test.ProbabilityCheck Test.Tasty.ProbabilityCheck
@@ -57,5 +55,7 @@ library
     , containers == 0.5.*
     , transformers == 0.3.*
     , time == 1.4.*
+    , sign == 0.4.*
+    , log-domain >= 0.9.3
   hs-source-dirs:      src
   default-language:    Haskell2010
