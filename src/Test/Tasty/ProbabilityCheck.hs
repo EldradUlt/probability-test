@@ -69,10 +69,11 @@ pairsToProbTestable alpha size sample = ProbabilisticTest
   , ptPF = valueLowMessage
   }
 
--- Default failure message when 
+-- Default failure message when the tested value is greater than zero. Note inappropriate for pairsToProbTestable.
 valueHighMessage :: (Show a) => DistributionTestResult a -> Maybe String
 valueHighMessage dtr = Just $ "Actual tested value was less than expected value.\n" ++ show dtr
 
+-- Default failure message when the tested value is less than zero. Note inappropriate for pairsToProbTestable.
 valueLowMessage :: (Show a) => DistributionTestResult a -> Maybe String
 valueLowMessage dtr = Just $ "Actual tested value was less than expected value.\n" ++ show dtr
 
