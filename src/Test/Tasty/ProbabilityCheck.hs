@@ -75,8 +75,24 @@ pairsToProbTestable alpha size sample = ProbabilisticTest
   , ptPF = valueLowMessage
   }
 
-approxActualToProbTestable
-  :: (InvErf a, RealFloat a, Ord a, Show a, Precise a, Integral b, Monad m)
+-- | Creates a ProbabilisticTest which when passed to
+-- testProbabilistic tests whether the confidence of the given
+-- Approximates is accurate based on the frequency with which the
+-- provided Actual result falls between the lo and hi of the
+-- Approximate.
+--
+-- /Note/: #18 This test fails if the confidences are either over or
+-- under confident. The messages that the failure print out are
+-- unclear.
+--
+-- /Bug/: #1 & #15 Test result actually has a lower confidence than the
+-- value given.
+--
+-- /Bug/: #4 Currently produces an error if the difference between the
+-- two values is the same for an entire window of the given size.
+--
+-- /Note/: #14 The window size should be calculated not user defined.
+approxActualToProbTestable :: (InvErf a, RealFloat a, Ord a, Show a, Precise a, Integral b, Monad m)
   => SignedLog a -- ^ This is 1 minus the desired confidence, which is
                  -- to say the allowable inaccuracy
                  -- rate. E.g. 0.05. (Bug #1)
