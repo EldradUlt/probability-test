@@ -5,7 +5,7 @@ import Test.ProbabilityCheck
 import Test.Tasty.ProbabilityCheck
 import Test.Tasty (defaultMain, testGroup)
 import Test.Tasty.HUnit (Assertion, testCase, assertFailure)
-import Data.Conduit (($$), Source, ZipSource(..), ($=), (=$))
+import Data.Conduit (($$), Source, ZipSource(..), ($=))
 import qualified Data.Conduit.List as CL
 import System.Random.MWC (withSystemRandom)
 import System.Random.MWC.Distributions (normal)
@@ -15,9 +15,10 @@ import qualified Data.HyperLogLog as HLL
 import Data.Reflection (nat)
 import Data.Approximate (Approximate(..))
 import Data.List (nub)
-import Test.QuickCheck (Gen, arbitrary, generate, choose, elements)
+import Test.QuickCheck (Gen, arbitrary, choose, elements, frequency)
 import Data.Monoid (mempty)
 import Control.Exception (try, SomeException)
+import Data.Ratio (numerator, denominator)
 
 main :: IO ()
 main =
@@ -47,6 +48,7 @@ main =
       assertResHasVal TestZero $ tupleSource 0 0 $$ wilcoxonSink 40 0.05 0.15
     , testCase "Simple invalid null hypothesis." $
       assertResHasVal TestNegative $ tupleSource 0 0.1 $$ wilcoxonSink 40 0.05 0.15
+    {- This test is incorrectly written and needs to be replaced.
     , testCase "Catching HLL error." $ do
       assertResHasVal TestZero
         $ (CL.unfoldM (\_ -> do
@@ -56,6 +58,7 @@ main =
                     let (Approximate conf lo _ hi) = HLL.size hll
                     in (realToFrac conf, if lo <= actual && actual <= hi then 1 else 0) :: (SignedLog Double, SignedLog Double))
         $$ wilcoxonSink 10000 0.1 0.20
+    -}
     ]
   , testGroup "Tests for testProbability"
     [ testProbabilistic "Simple testProbabilistic success."
@@ -95,7 +98,10 @@ genHLLConfCorrect :: Gen (SignedLog Double, SignedLog Double)
 genHLLConfCorrect = do
   ((actual, hll), _) <- genHLLActualApprox
   let (Approximate conf lo _ hi) = HLL.size hll
-  return (realToFrac conf, if lo <= actual && actual <= hi then 1 else 0)
+      (n, d) = (numerator $ toRational conf, denominator $ toRational conf)
+      (a, b) = (fromInteger (d-n), fromInteger n)
+  c <- frequency [(a, return 0), (b, return 1)]
+  return (c, if lo <= actual && actual <= hi then 1 else 0)
 
 genHLLActualApprox :: (Num a) => Gen ((a, HLL.HyperLogLog $(nat 5)), [Integer])
 genHLLActualApprox = do

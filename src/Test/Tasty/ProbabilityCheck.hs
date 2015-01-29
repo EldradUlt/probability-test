@@ -12,7 +12,7 @@ module Test.Tasty.ProbabilityCheck
 
 import Test.Tasty (TestName, TestTree)
 import Test.Tasty.HUnit (testCase, Assertion, assertFailure)
-import Test.QuickCheck (Gen, generate)
+import Test.QuickCheck (Gen, generate, frequency)
 import Data.Number.Erf (InvErf(..))
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Conduit (Source, ($$), ($=), transPipe)
@@ -92,18 +92,23 @@ pairsToProbTestable alpha size sample = ProbabilisticTest
 -- two values is the same for an entire window of the given size.
 --
 -- /Note/: #14 The window size should be calculated not user defined.
-approxActualToProbTestable :: (InvErf a, RealFloat a, Ord a, Show a, Precise a, Integral b, Monad m)
+approxActualToProbTestable :: (InvErf a, RealFloat a, Ord a, Show a, Precise a, Integral b)
   => SignedLog a -- ^ This is 1 minus the desired confidence, which is
                  -- to say the allowable inaccuracy
                  -- rate. E.g. 0.05. (Bug #1)
   -> b -- ^ Window size to use for Wilcoxon. (Bug #4, Note #14)
-  -> m (Approximate a, a) -- ^ Monadic sample of Approximate's and
+  -> Gen (Approximate a, a) -- ^ Monadic sample of Approximate's and
                           -- Actual results to be tested.
-  -> ProbabilisticTest m (SignedLog a) -- ^ Result to pass to testProbabilistic.
+  -> ProbabilisticTest Gen (SignedLog a) -- ^ Result to pass to testProbabilistic.
 approxActualToProbTestable alpha size sample =
   pairsToProbTestable alpha size
-  (sample >>= (\(Approximate conf lo _ hi, actual)
-               -> return (realToFrac conf, if lo <= actual && actual <= hi then 1 else 0)))
+  (sample >>= (\(Approximate conf lo _ hi, actual) -> do
+                  let (n, d) = (numerator $ toRational conf, denominator $ toRational conf)
+                      (a, b) = (fromInteger (d-n), fromInteger n)
+                  c <- frequency [(a, return 0), (b, return 1)]
+                  return (c, if lo <= actual && actual <= hi then 1 else 0)
+                  )
+   )
 
 -- Default failure message when the tested value is greater than zero. Note inappropriate for pairsToProbTestable.
 valueHighMessage :: (Show a) => DistributionTestResult a -> Maybe String

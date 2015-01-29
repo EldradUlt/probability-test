@@ -216,6 +216,16 @@ ssdConduit = do
         where updateSSDPair a s = (newSSD, (newSSD, a))
                 where newSSD = updateSSD a s
 
+-- | Creates a Sink which when fused with a Source of tuples tests
+-- whether each pair of values came from populations with the same
+-- mean.
+--
+-- This is actually a bit of a hack at the moment and doesn't have any
+-- solid guarantees. This should run a single wilcoxon T test with a
+-- size parameter calculated from user supplied desired confidence and
+-- characteristics of frequency and size of differnce to be detected.
+--
+-- 
 wilcoxonSink :: (InvErf a, RealFrac a, Ord a, Show a, MonadIO m) => Int -> a -> a -> Sink (a,a) m (DistributionTestResult a)
 wilcoxonSink size alpha minDiff = wilcoxonRankedPairsConduit size =$ testNormDistSink True alpha (MDRelative minDiff)
 
