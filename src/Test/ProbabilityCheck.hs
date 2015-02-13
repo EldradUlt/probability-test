@@ -259,3 +259,45 @@ wilcoxonRankedConduit' size = do
     else return ()
 
 
+-- Hardcoded:
+-- beta = 1.1
+-- d(t) = (t(t+1))^(-1)
+-- http://machinelearning.org/archive/icml2008/papers/523.pdf
+empiricalBernstienStopping :: (Num a, Monad m) => a -> a -> a -> Sink a m (DistributionTestResult a)
+empiricalBernstienStopping d eps range =
+     ssdConduit
+  $= undefined -- drop first ssd on floor.
+  $= empiricalBernstienStopping' 2 1 ssd
+
+empiricalBernstienStopping' :: (Floating a, Monad m) => Integer -> Integer -> a -> a -> a -> Sink (SreamStdDev a) m (DistributionTestResult a)
+empiricalBernstienStopping' t k d eps range = 
+  mNext <- await
+  case mNext of
+    Nothing -> return $ DistributionTestResult
+               -- These SSD values are a lie but I don't want to keep
+               -- the previous ssd around just for that. Probably will
+               -- eventually or will peek at the next.
+               { dtrValue = TestInsufficientSample, dtrTestedMean = 0, dtrStdDev = 0
+               , dtrSampleSize = 0, dtrUpperBound = 0, dtrLowerBound = 0}
+    Just ssd ->
+      case (abs mean, ct) of
+        (absMean, bound) | (absMean + bound < eps) ->
+          return $ dtr { dtrValue = TestZero }
+        (absMean, bound) | (absMean - bound) > 0 ->
+          return $ dtr { dtrValue = if mean > 0 then TestPositive else TestNegative }
+        _ -> empiricalBernstienStopping' (t+1) (if t > floor(b^k) then k+1 else k) d eps range
+      where dtr = DistributionTestResult { dtrValue = error "Used DistributionTestResult without setting value."
+                                         , dtrTestedMean = mean
+                                         , dtrStdDev = stdDev
+                                         , dtrSampleSize = count
+                                         , dtrUpperBound = mean + bound
+                                         , dtrLowerBound = mean - bound }
+            mean = ssdMean ssd
+            stdDev = ssdStdDev ssd
+            count = ssdCount ssd
+            ct = stdDev*sqrt(2*x/(fromInteger t)) + 3*range*x*t
+            b = 1.1
+            a = floor(b^k)/floor(beta^(k-1)) :: Integer
+            x = (fromInteger a) * log (3 * k * (k+1)) -- Implicite def of serries being t*(t+1)
+
+
