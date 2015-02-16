@@ -7,6 +7,7 @@ module Test.ProbabilityCheck
        , updateSSD, ssdConduit
        , MinDiff(..)
        , conduitPrint
+       , empiricalBernstienStopping
        ) where
 
 import Statistics.Test.Types (TestType(..))
@@ -19,6 +20,7 @@ import Data.List (sort, groupBy)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Time (getCurrentTime, diffUTCTime, addUTCTime, NominalDiffTime, utcToZonedTime, getTimeZone, getTimeZone)
 import Control.Concurrent (threadDelay)
+import Data.Ratio ((%))
 
 -- This probably wants better naming at some point.
 data DistributionTestResult a = DistributionTestResult
@@ -263,14 +265,14 @@ wilcoxonRankedConduit' size = do
 -- beta = 1.1
 -- d(t) = (t(t+1))^(-1)
 -- http://machinelearning.org/archive/icml2008/papers/523.pdf
-empiricalBernstienStopping :: (Num a, Monad m) => a -> a -> a -> Sink a m (DistributionTestResult a)
+empiricalBernstienStopping :: forall a m. (RealFrac a, Floating a, Ord a, Monad m) => a -> a -> a -> Sink a m (DistributionTestResult a)
 empiricalBernstienStopping d eps range =
      ssdConduit
-  $= undefined -- drop first ssd on floor.
-  $= empiricalBernstienStopping' 2 1 ssd
+  =$ do {CL.drop 1; awaitForever yield}
+  =$ empiricalBernstienStopping' 2 1 d eps range
 
-empiricalBernstienStopping' :: (Floating a, Monad m) => Integer -> Integer -> a -> a -> a -> Sink (SreamStdDev a) m (DistributionTestResult a)
-empiricalBernstienStopping' t k d eps range = 
+empiricalBernstienStopping' :: forall a m. (RealFrac a, Floating a, Ord a, Monad m) => Integer -> Integer -> a -> a -> a -> Sink (StreamStdDev a) m (DistributionTestResult a)
+empiricalBernstienStopping' t k d eps range = do
   mNext <- await
   case mNext of
     Nothing -> return $ DistributionTestResult
@@ -285,19 +287,28 @@ empiricalBernstienStopping' t k d eps range =
           return $ dtr { dtrValue = TestZero }
         (absMean, bound) | (absMean - bound) > 0 ->
           return $ dtr { dtrValue = if mean > 0 then TestPositive else TestNegative }
-        _ -> empiricalBernstienStopping' (t+1) (if t > floor(b^k) then k+1 else k) d eps range
+        _ -> empiricalBernstienStopping' (t+1) (if t > floor(beta^k) then k+1 else k) d eps range
       where dtr = DistributionTestResult { dtrValue = error "Used DistributionTestResult without setting value."
                                          , dtrTestedMean = mean
                                          , dtrStdDev = stdDev
                                          , dtrSampleSize = count
-                                         , dtrUpperBound = mean + bound
-                                         , dtrLowerBound = mean - bound }
+                                         , dtrUpperBound = mean + ct
+                                         , dtrLowerBound = mean - ct }
+            mean :: a
             mean = ssdMean ssd
+            stdDev :: a
             stdDev = ssdStdDev ssd
+            count :: Integer
             count = ssdCount ssd
-            ct = stdDev*sqrt(2*x/(fromInteger t)) + 3*range*x*t
-            b = 1.1
-            a = floor(b^k)/floor(beta^(k-1)) :: Integer
-            x = (fromInteger a) * log (3 * k * (k+1)) -- Implicite def of serries being t*(t+1)
+            ct :: a
+            ct = stdDev*sqrt(2*x/(fromInteger t)) + 3*range*x*(fromInteger t)
+            beta :: a
+            beta = 1.1
+            alpha :: Rational -- This only needs to be recalculated
+                              -- when k changes.
+            alpha = floor(beta^k) % floor(beta^(k-1))
+            x :: a -- Implicite def of serries being t*(t+1), this
+                   -- only needs to be recaclulated when k changes.
+            x = (fromRational alpha) * log (3 * (fromInteger k) * (fromInteger $ k+1))
 
 
