@@ -126,10 +126,16 @@ empiricalBernstienStopping' t k delta eps range = do
                    -- changes.
             x = (-1) * (fromRational alpha) * log (dk / 3)
             dk :: a
-            dk = c / (fromIntegral k) ** p
+            -- dk = c / (fromIntegral k) ** p
+
+            -- This actually converges to exactly delta instead of
+            -- slightly less than delta (~.96*delta) for the commented
+            -- out values.
+            dk = delta / (fromIntegral $ k*(k+1))
+            {-
             p :: a
             p = 1.1
             c :: a
             c = delta * (p-1) / p
-
+            -}
 
