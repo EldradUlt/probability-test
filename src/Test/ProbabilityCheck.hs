@@ -83,7 +83,7 @@ empiricalBernstienStopping range delta eps =
      ssdConduit
   =$ do {CL.drop 1; awaitForever yield}
   =$ empiricalBernstienStoppingConduit 2 1 range delta
-  =$ conduitPrint
+--  =$ conduitPrint
   =$ empiricalBernstienStoppingSink eps
 
 data EBSState a = EBSState
