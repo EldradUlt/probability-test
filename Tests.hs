@@ -4,8 +4,8 @@ module Main where
 import Test.ProbabilityCheck
 import Test.Tasty.ProbabilityCheck
 import Test.Tasty (defaultMain, testGroup)
-import Test.Tasty.HUnit (Assertion, assertFailure)
-import Data.Conduit (Source, ZipSource(..), ($=))
+import Test.Tasty.HUnit (Assertion, assertFailure, testCase)
+import Data.Conduit (Source, ZipSource(..), ($=), Conduit, ($$))
 import qualified Data.Conduit.List as CL
 import System.Random.MWC (withSystemRandom)
 import System.Random.MWC.Distributions (normal)
@@ -23,6 +23,8 @@ main =
   defaultMain $
   testGroup "probability-test's Tests"
   [
+    testCase "Simple empiricalBernstienStopping TestZero case" $
+    assertResHasVal TestZero $ zeroSourceRangeLimit $$ empiricalBernstienStopping 2 0.05 0.1
   ]
 
 genHLLConfCorrect :: Gen (SignedLog Double, SignedLog Double)
@@ -55,6 +57,9 @@ normalDoubleSource mean = CL.unfoldM (\_ -> do
                                          r <- rIO mean
                                          return $ Just (r, ())) ()
 
+limitRange :: Double -> Double -> Conduit Double IO Double
+limitRange lo hi = CL.map (\a -> max lo $ min hi a)
+
 rIO :: Double -> IO Double
 rIO mean = withSystemRandom (\gen -> normal mean 1 gen :: IO Double)
 
@@ -66,6 +71,9 @@ pIO meanA meanB = do
 
 zeroSource :: Source IO Double
 zeroSource = normalDoubleSource 0
+
+zeroSourceRangeLimit :: Source IO Double
+zeroSourceRangeLimit = zeroSource $= limitRange (-1) 1
 
 oneTenthSource :: Source IO Double
 oneTenthSource = normalDoubleSource 0.1

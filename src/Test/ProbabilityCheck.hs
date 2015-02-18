@@ -78,14 +78,63 @@ conduitPrint = CL.mapM (\x -> do
                            return x)
 
 -- http://machinelearning.org/archive/icml2008/papers/523.pdf
-empiricalBernstienStopping :: forall a m. (RealFrac a, Floating a, Ord a, Monad m) => a -> a -> a -> Sink a m (DistributionTestResult a)
-empiricalBernstienStopping d eps range =
+empiricalBernstienStopping :: (Show a, RealFrac a, Floating a, Ord a, MonadIO m) => a -> a -> a -> Sink a m (DistributionTestResult a)
+empiricalBernstienStopping range delta eps =
      ssdConduit
   =$ do {CL.drop 1; awaitForever yield}
-  =$ empiricalBernstienStopping' 2 1 d eps range
+  =$ empiricalBernstienStoppingConduit 2 1 range delta
+  =$ conduitPrint
+  =$ empiricalBernstienStoppingSink eps
 
-empiricalBernstienStopping' :: forall a m. (RealFrac a, Floating a, Ord a, Monad m) => Integer -> Integer -> a -> a -> a -> Sink (StreamStdDev a) m (DistributionTestResult a)
-empiricalBernstienStopping' t k delta eps range = do
+data EBSState a = EBSState
+    { ebsSSD :: StreamStdDev a
+    , ebsCt :: a
+    , ebsT :: Integer
+    , ebsK :: Integer
+    , ebsX :: a
+    , ebsDk :: a
+    , ebsAlpha :: Rational
+    } deriving (Show)
+
+empiricalBernstienStoppingConduit :: forall a m. (RealFrac a, Floating a, Ord a, Monad m)
+                                     => Integer -> Integer -> a -> a -> Conduit (StreamStdDev a) m (EBSState a)
+empiricalBernstienStoppingConduit t k range delta = do
+  mNext <- await
+  case mNext of
+    Nothing -> return ()
+    Just ssd -> do
+      yield $ EBSState {ebsSSD = ssd, ebsCt = ct, ebsT = newT, ebsK = newK, ebsX = x, ebsDk = dk, ebsAlpha = alpha}
+      empiricalBernstienStoppingConduit newT newK range delta
+      where  ct :: a
+             ct = (ssdStdDev ssd)*sqrt(2*x/(fromInteger t)) + 3*range*x/(fromInteger t)
+             beta :: a
+             beta = 1.1 -- This probably wants to be proportional to
+                    -- delta or eps. It is accurate but non-optimal as
+                    -- is.
+             alpha :: Rational -- This only needs to be recalculated
+                      -- when k changes.
+             alpha = floor(beta^k) % floor(beta^(k-1))
+             x :: a -- This only needs to be recaclulated when k
+                  -- changes.
+             x = (-1) * (fromRational alpha) * log (dk / 3)
+             dk :: a
+             -- dk = c / (fromIntegral k) ** p
+             
+             -- This actually converges to exactly delta instead of
+             -- slightly less than delta (~.96*delta) for the
+             -- commented out values.
+             dk = delta / (fromIntegral $ k*(k+1))
+             {-
+             p :: a
+             p = 1.1
+             c :: a
+             c = delta * (p-1) / p
+             -}
+             newT = t+1
+             newK = if t+1 > floor(beta^k) then k+1 else k
+
+empiricalBernstienStoppingSink :: (RealFrac a, Floating a, Ord a, Monad m) => a -> Sink (EBSState a) m (DistributionTestResult a)
+empiricalBernstienStoppingSink eps = do
   mNext <- await
   case mNext of
     Nothing -> return $ DistributionTestResult
@@ -94,48 +143,23 @@ empiricalBernstienStopping' t k delta eps range = do
                -- eventually or will peek at the next.
                { dtrValue = TestInsufficientSample, dtrTestedMean = 0, dtrStdDev = 0
                , dtrSampleSize = 0, dtrUpperBound = 0, dtrLowerBound = 0}
-    Just ssd ->
+    Just ebs ->
       case (abs mean, ct) of
         (absMean, bound) | (absMean + bound < eps) ->
           return $ dtr { dtrValue = TestZero }
         (absMean, bound) | (absMean - bound) > 0 ->
           return $ dtr { dtrValue = if mean > 0 then TestPositive else TestNegative }
-        _ -> empiricalBernstienStopping' (t+1) (if t+1 > floor(beta^k) then k+1 else k) delta eps range
-      where dtr = DistributionTestResult { dtrValue = error "Used DistributionTestResult without setting value."
+        _ -> empiricalBernstienStoppingSink eps
+      where ssd = ebsSSD ebs
+            ct = ebsCt ebs
+            dtr = DistributionTestResult { dtrValue = error "Used DistributionTestResult without setting value."
                                          , dtrTestedMean = mean
                                          , dtrStdDev = stdDev
                                          , dtrSampleSize = count
                                          , dtrUpperBound = mean + ct
                                          , dtrLowerBound = mean - ct }
-            mean :: a
             mean = ssdMean ssd
-            stdDev :: a
             stdDev = ssdStdDev ssd
-            count :: Integer
             count = ssdCount ssd
-            ct :: a
-            ct = stdDev*sqrt(2*x/(fromInteger t)) + 3*range*x*(fromInteger t)
-            beta :: a
-            beta = 1.1 -- This probably wants to be proportional to
-                       -- delta or eps. It is accurate but non-optimal
-                       -- as is.
-            alpha :: Rational -- This only needs to be recalculated
-                              -- when k changes.
-            alpha = floor(beta^k) % floor(beta^(k-1))
-            x :: a -- This only needs to be recaclulated when k
-                   -- changes.
-            x = (-1) * (fromRational alpha) * log (dk / 3)
-            dk :: a
-            -- dk = c / (fromIntegral k) ** p
 
-            -- This actually converges to exactly delta instead of
-            -- slightly less than delta (~.96*delta) for the commented
-            -- out values.
-            dk = delta / (fromIntegral $ k*(k+1))
-            {-
-            p :: a
-            p = 1.1
-            c :: a
-            c = delta * (p-1) / p
-            -}
 
