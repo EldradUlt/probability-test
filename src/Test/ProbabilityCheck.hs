@@ -78,6 +78,18 @@ conduitPrint = CL.mapM (\x -> do
                            return x)
 
 -- http://machinelearning.org/archive/icml2008/papers/523.pdf
+--
+-- Assertions I believe can be made, if range is the magnitude of
+-- range of possible values in the population.
+--
+-- 1) This will stop in finite time.
+--
+-- 2) If the actual mean of the population is 0 then the test will
+-- return TestZero at least (1-delta) of the time.
+--
+-- 3) If the absolute value of the actual mean of the population is
+-- greater than eps the test will return the appropriate TestPositive
+-- or TestNegative at least (1-delta) of the time.
 empiricalBernstienStopping :: (Show a, RealFrac a, Floating a, Ord a, MonadIO m) => a -> a -> a -> Sink a m (DistributionTestResult a)
 empiricalBernstienStopping range delta eps =
      ssdConduit
