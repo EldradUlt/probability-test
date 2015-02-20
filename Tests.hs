@@ -25,6 +25,10 @@ main =
   [
     testCase "Simple empiricalBernstienStopping TestZero case" $
     assertResHasVal TestZero $ zeroSourceRangeLimit $$ empiricalBernstienStopping 2 0.05 0.1
+  , testCase "Simple empiricalBernstienStopping TestPositive case" $
+    assertResHasVal TestPositive $ oneTenthSourceRangeLimit $$ empiricalBernstienStopping 2 0.05 0.1
+  , testCase "Simple empiricalBernstienStopping TestNegative case" $
+    assertResHasVal TestNegative $ negOneTenthSourceRangeLimit $$ empiricalBernstienStopping 2 0.05 0.1
   ]
 
 genHLLConfCorrect :: Gen (SignedLog Double, SignedLog Double)
@@ -74,6 +78,12 @@ zeroSource = normalDoubleSource 0
 
 zeroSourceRangeLimit :: Source IO Double
 zeroSourceRangeLimit = zeroSource $= limitRange (-1) 1
+
+oneTenthSourceRangeLimit :: Source IO Double
+oneTenthSourceRangeLimit = oneTenthSource $= limitRange (-0.9) 1.1
+
+negOneTenthSourceRangeLimit :: Source IO Double
+negOneTenthSourceRangeLimit = (normalDoubleSource (-0.1)) $= limitRange (-1.1) 0.9
 
 oneTenthSource :: Source IO Double
 oneTenthSource = normalDoubleSource 0.1

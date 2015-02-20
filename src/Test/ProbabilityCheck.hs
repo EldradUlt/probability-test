@@ -143,7 +143,7 @@ empiricalBernstienStoppingConduit t k range delta = do
              c = delta * (p-1) / p
              -}
              newT = t+1
-             newK = if t+1 > floor(beta^k) then k+1 else k
+             newK = if newT > floor(beta^k) then k+1 else k
 
 empiricalBernstienStoppingSink :: (RealFrac a, Floating a, Ord a, Monad m) => a -> Sink (EBSState a) m (DistributionTestResult a)
 empiricalBernstienStoppingSink eps = do
