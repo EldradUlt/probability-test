@@ -120,23 +120,23 @@ empiricalBernstienStoppingConduit t k range delta = do
       where  ct :: a
              ct = (ssdStdDev ssd)*sqrt(2*x/(fromInteger t)) + 3*range*x/(fromInteger t)
              beta :: a
-             beta = 1.1 -- This probably wants to be proportional to
-                    -- delta or eps. It is accurate but non-optimal as
-                    -- is.
+             beta = 1.1 -- I'm not sure what this value wants to
+                        -- be. Any value greater than 1 should be
+                        -- valid. But I don't know what values are
+                        -- optimal.
              alpha :: Rational -- This only needs to be recalculated
-                      -- when k changes.
+                               -- when k changes.
              alpha = floor(beta^k) % floor(beta^(k-1))
              x :: a -- This only needs to be recaclulated when k
-                  -- changes.
+                    -- changes.
              x = (-1) * (fromRational alpha) * log (dk / 3)
              dk :: a
-             -- dk = c / (fromIntegral k) ** p
-             
              -- This actually converges to exactly delta instead of
              -- slightly less than delta (~.96*delta) for the
              -- commented out values.
              dk = delta / (fromIntegral $ k*(k+1))
              {-
+             dk = c / (fromIntegral k) ** p
              p :: a
              p = 1.1
              c :: a
