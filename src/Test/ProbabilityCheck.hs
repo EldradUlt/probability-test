@@ -2,16 +2,18 @@
 
 module Test.ProbabilityCheck
        ( DistributionTestResult(..), DistributionTestValue(..)
-       , updateSSD, ssdConduit
        , conduitPrint
        , empiricalBernstienStopping
        ) where
 
-import Data.Conduit (Sink, Conduit, await, yield, (=$=), (=$), awaitForever)
+import Data.Conduit (Sink, Conduit, await, yield, (=$=), (=$), awaitForever, addCleanup)
 import qualified Data.Conduit.List as CL
 import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Ratio ((%))
+import System.IO ( hSetBuffering, BufferMode(NoBuffering), stdout, hFlush)
+import System.ProgressBar (progressBar, msg, exact)
+import Control.Concurrent (threadDelay)
 
 -- This probably wants better naming at some point.
 data DistributionTestResult a = DistributionTestResult
@@ -91,22 +93,13 @@ conduitPrint = CL.mapM (\x -> do
 -- greater than eps the test will return the appropriate TestPositive
 -- or TestNegative at least (1-delta) of the time.
 empiricalBernstienStopping :: (Show a, RealFrac a, Floating a, Ord a, MonadIO m) => a -> a -> a -> Sink a m (DistributionTestResult a)
-empiricalBernstienStopping range delta eps =
-     ssdConduit
-  =$ do {CL.drop 1; awaitForever yield}
-  =$ empiricalBernstienStoppingConduit 2 1 range delta
---  =$ conduitPrint
-  =$ empiricalBernstienStoppingSink eps
-
-data EBSState a = EBSState
-    { ebsSSD :: StreamStdDev a
-    , ebsCt :: a
-    , ebsT :: Integer
-    , ebsK :: Integer
-    , ebsX :: a
-    , ebsDk :: a
-    , ebsAlpha :: Rational
-    } deriving (Show)
+empiricalBernstienStopping range delta eps = do
+  result <- ssdConduit
+            =$ do {CL.drop 1; awaitForever yield}
+            =$ empiricalBernstienStoppingConduit 2 1 range delta
+            =$ printEBSConduit
+            =$ empiricalBernstienStoppingSink eps
+  return result
 
 empiricalBernstienStoppingConduit :: forall a m. (RealFrac a, Floating a, Ord a, Monad m)
                                      => Integer -> Integer -> a -> a -> Conduit (StreamStdDev a) m (EBSState a)
@@ -173,5 +166,29 @@ empiricalBernstienStoppingSink eps = do
             mean = ssdMean ssd
             stdDev = ssdStdDev ssd
             count = ssdCount ssd
+
+data EBSState a = EBSState
+    { ebsSSD :: StreamStdDev a
+    , ebsCt :: a
+    , ebsT :: Integer
+    , ebsK :: Integer
+    , ebsX :: a
+    , ebsDk :: a
+    , ebsAlpha :: Rational
+    } deriving (Show)
+
+printEBSConduit :: (MonadIO m) => Conduit (EBSState a) m (EBSState a)
+printEBSConduit = do
+  liftIO $ hSetBuffering stdout NoBuffering
+  liftIO $ threadDelay 10000 -- This is a hack to prevent a collision
+                             -- of printing with hunit. Should be
+                             -- fixed.
+  liftIO $ putStrLn ""
+  addCleanup (\_-> liftIO$ putStrLn "") $ awaitForever go
+    where go ebs@(EBSState ssd ct t k x dk alpha) = do
+            liftIO $ progressBar (msg "Working") exact 40 t estimatedEnd
+            yield ebs
+          estimatedEnd = 1000
+
 
 
