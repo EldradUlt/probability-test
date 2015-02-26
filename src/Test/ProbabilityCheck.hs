@@ -11,7 +11,7 @@ import qualified Data.Conduit.List as CL
 import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Ratio ((%))
-import System.IO ( hSetBuffering, BufferMode(NoBuffering), stdout, hFlush)
+import System.IO ( hSetBuffering, BufferMode(NoBuffering), stdout)
 import System.ProgressBar (progressBar, msg, exact)
 import Control.Concurrent (threadDelay)
 
@@ -97,7 +97,7 @@ empiricalBernstienStopping range delta eps = do
   result <- ssdConduit
             =$ do {CL.drop 1; awaitForever yield}
             =$ empiricalBernstienStoppingConduit 2 1 range delta
-            =$ printEBSConduit
+            =$ printEBSConduit range delta eps
             =$ empiricalBernstienStoppingSink eps
   return result
 
@@ -117,11 +117,9 @@ empiricalBernstienStoppingConduit t k range delta = do
                         -- be. Any value greater than 1 should be
                         -- valid. But I don't know what values are
                         -- optimal.
-             alpha :: Rational -- This only needs to be recalculated
-                               -- when k changes.
+             alpha :: Rational
              alpha = floor(beta^k) % floor(beta^(k-1))
-             x :: a -- This only needs to be recaclulated when k
-                    -- changes.
+             x :: a
              x = (-1) * (fromRational alpha) * log (dk / 3)
              dk :: a
              -- This actually converges to exactly delta instead of
@@ -177,18 +175,20 @@ data EBSState a = EBSState
     , ebsAlpha :: Rational
     } deriving (Show)
 
-printEBSConduit :: (MonadIO m) => Conduit (EBSState a) m (EBSState a)
-printEBSConduit = do
+printEBSConduit :: (Show a, RealFrac a, Floating a, MonadIO m) => a -> a -> a -> Conduit (EBSState a) m (EBSState a)
+printEBSConduit range delta eps = do
   liftIO $ hSetBuffering stdout NoBuffering
   liftIO $ threadDelay 10000 -- This is a hack to prevent a collision
                              -- of printing with hunit. Should be
                              -- fixed.
   liftIO $ putStrLn ""
-  addCleanup (\_-> liftIO$ putStrLn "") $ awaitForever go
-    where go ebs@(EBSState ssd ct t k x dk alpha) = do
+  addCleanup (\_-> liftIO$ putStr ": ") $ awaitForever go
+    where go ebs@(EBSState ssd _ t k _ _ _) = do
             liftIO $ progressBar (msg "Working") exact 40 t estimatedEnd
             yield ebs
-          estimatedEnd = 1000
-
+            where estimatedEnd = ceiling $ (b + sqrt(b^(2::Integer)+4*a*c))^(2::Integer)/(4*a^(2::Integer))
+                  a = max (abs $ ssdMean ssd) (abs $ (abs $ ssdMean ssd) - eps)
+                  b = (ssdStdDev ssd) * sqrt(2*1.1*log((fromInteger $ 3*k*(k+1))/delta))
+                  c = 3*1.1*range*log((fromInteger $ 3*k*(k+1))/delta)
 
 
