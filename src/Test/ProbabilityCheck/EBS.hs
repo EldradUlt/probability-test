@@ -95,7 +95,7 @@ conduitPrint = CL.mapM (\x -> do
 empiricalBernstienStopping :: (Show a, RealFrac a, Floating a, Ord a, MonadIO m) => a -> a -> a -> Sink a m (DistributionTestResult a)
 empiricalBernstienStopping range delta eps = do
   result <- ssdConduit
-            =$ CL.drop 1 >> awaitForever yield
+            =$ (CL.drop 1 >> awaitForever yield)
             =$ empiricalBernstienStoppingConduit 2 1 range delta
             =$ printEBSConduit range delta eps
             =$ empiricalBernstienStoppingSink eps
@@ -151,7 +151,7 @@ empiricalBernstienStoppingSink eps = do
         (absMean, bound) | (absMean + bound < eps) ->
           return $ dtr TestZero
         (absMean, bound) | (absMean - bound) > 0 ->
-          return $ dtr if mean > 0 then TestPositive else TestNegative
+          return $ dtr $ if mean > 0 then TestPositive else TestNegative
         _ -> empiricalBernstienStoppingSink eps
       where ssd = ebsSSD ebs
             ct = ebsCt ebs
