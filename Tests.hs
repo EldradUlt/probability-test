@@ -2,6 +2,7 @@
 module Main where
 
 import Test.ProbabilityCheck
+import Test.ProbabilityCheck.EBS
 import Test.Tasty.ProbabilityCheck
 import Test.Tasty (defaultMain, testGroup)
 import Test.Tasty.HUnit (Assertion, assertFailure, testCase)

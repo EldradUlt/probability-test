@@ -5,8 +5,8 @@ module Test.Tasty.ProbabilityCheck
        , monadicToSource -- temp export to hide warning.
        ) where
 
---import Test.Tasty (TestName, TestTree)
---import Test.Tasty.HUnit (testCase, Assertion, assertFailure)
+import Test.Tasty (TestName, TestTree)
+import Test.Tasty.Providers (singleTest, IsTest(..))
 --import Test.QuickCheck (Gen, generate, frequency)
 --import Control.Monad.IO.Class (MonadIO(..))
 import Data.Conduit (Source)
@@ -14,9 +14,22 @@ import qualified Data.Conduit.List as CL
 import qualified Data.Sign as S
 import Data.Ratio (numerator, denominator)
 import Numeric.Log (Log(..), Precise)
---import Data.Approximate (Approximate(..))
+import Data.Approximate (Approximate(..))
 
---import Test.ProbabilityCheck
+import Test.ProbabilityCheck
+import Test.ProbabilityCheck.EBS
+
+-- Assumes conf between 0 and 1.
+testApproximate :: (ProbTestableMonad m, Ord a) => TestName -> SignedLog Double -> SignedLog Double -> m (a, Approximate a) -> TestTree
+testApproximate name delta epsilon approximates =
+  singleTest
+  source
+  $= (CL.map (\p@(_, Approximate conf _ _ _) -> (actualApproximateToOneZero p) - (fromSomethingorother conf)))
+  $$ empiricalBernstienStopping 2 delta epsilon
+  where source = monadicToSource approximates
+
+actualApproximateToOneZero :: (Num a, Ord a) => (a, Approximate a) -> a
+actualApproximateToOneZero (actual, Approximate _ lo _ hi) = if lo <= actual && actual <= hi then 1 else 0
 
 -- Helper function which turns a monadic value into a
 -- Data.Conduit.Source of those values.
