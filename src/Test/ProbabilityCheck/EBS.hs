@@ -14,6 +14,8 @@ import Data.Ratio ((%))
 import System.IO ( hSetBuffering, BufferMode(NoBuffering), stdout)
 import System.ProgressBar (progressBar, msg, exact)
 import Control.Concurrent (threadDelay)
+import Test.QuickCheck.Property (succeeded, failed, rejected, Result(reason))
+import Test.QuickCheck (Testable(..))
 
 -- This probably wants better naming at some point.
 data DistributionTestResult a = DistributionTestResult
@@ -25,6 +27,14 @@ data DistributionTestResult a = DistributionTestResult
                                 , dtrLowerBound :: a
                                 }
                               deriving (Show, Eq) 
+
+instance Testable (DistributionTestResult a) where
+  property dtr = property $ case dtrValue dtr of
+    TestZero -> succeeded
+    TestNegative -> failed {reason = "Tested mean less than zero."}
+    TestPositive -> failed {reason = "Tested mean greater than zero."}
+    TestInsufficientSample -> rejected {reason = "Insufficient Samples available."}
+  exhaustive _ = True
 
 data DistributionTestValue = TestZero
                            | TestNegative
