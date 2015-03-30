@@ -6,13 +6,21 @@ module Test.ProbabilityCheck.Types
        , StreamStdDev(..), ssdStdDev
        , initSSD, updateSSD, ssdConduit
        , EBSState(..)
+       , Action(..)
+       , Args(..), stdArgs, State(..)
+       , ProbTestable(..)
+       , FoobarResult(..)
        ) where
 
 import Test.QuickCheck.Property (succeeded, failed, rejected, Result(reason))
-import Test.QuickCheck (Testable(..))
+import Test.QuickCheck (Testable(..), Arbitrary(..))
 import Data.Conduit (Conduit, await, yield, (=$=))
 import qualified Data.Conduit.List as CL
 import Control.Monad (void)
+import Test.QuickCheck.Random (QCGen)
+import Test.QuickCheck.Text (Terminal)
+import Data.Ratio ((%))
+import Test.QuickCheck.Gen (Gen(..))
 
 -- This probably wants better naming at some point.
 data DistributionTestResult a = DistributionTestResult
@@ -88,5 +96,61 @@ data EBSState a = EBSState
     , ebsDk :: a
     , ebsAlpha :: Rational
     } deriving (Show)
+
+data Action -- Place holder for potentially more complicated or less complicated system.
+  = Pass
+  | Warn
+  | Fail
+
+data Args
+  = Args
+    { aReplay :: Maybe (QCGen, Int)
+    , aValueAction :: DistributionTestValue -> Action -- For a given value should the test, pass, warn, and/or fail.
+    , aRange :: Rational -- Absolute value of the range of possible outputs.
+    , aDelta :: Rational -- Error rate.
+    , aEpsilon :: Rational -- Difference from Zero to be considered Zero.
+    , aChatty :: Bool -- Whether to print anything.
+    }
+
+stdArgs :: Args
+stdArgs =
+  Args { aReplay = Nothing
+       , aValueAction = \v -> case v of
+         TestZero -> Pass
+         TestNegative -> Fail
+         TestPositive -> Warn
+         TestInsufficientSample -> Fail
+       , aRange = 2
+       , aDelta = 0.05
+       , aEpsilon = 2 % 1000
+       , aChatty = True
+       }
+
+data State a
+  = MkState
+    { terminal                  :: Terminal          -- ^ the current terminal
+    , stateRange                :: Rational          -- ^ the absolute value of the range of possible values.
+    , stateDelta                :: Rational          -- ^ acceptable frequency of innacurate results.
+    , stateEpsilon              :: Rational          -- ^ minimal value which is acceptably close to zero.
+    , stateValueAction          :: DistributionTestValue -> Action
+      
+    -- dynamic ***
+    , stateSSD                  :: StreamStdDev a
+    , randomSeed                :: !QCGen
+    }
+
+class ProbTestable prop where
+  genValue :: (Show a, RealFrac a, Floating a, Ord a) => prop -> Gen a
+
+{-
+instance (Show a, RealFrac a, Floating a, Ord a) => ProbTestable a where
+  genValue a = return a
+-}
+
+instance (Arbitrary arg, ProbTestable prop) => ProbTestable (arg -> prop) where
+  genValue f = arbitrary >>= genValue . f
+
+data FoobarResult = FoobarResult
+
 
 
