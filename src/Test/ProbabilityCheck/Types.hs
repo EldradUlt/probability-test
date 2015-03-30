@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts, ScopedTypeVariables #-}
+{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts, ScopedTypeVariables, FunctionalDependencies, UndecidableInstances #-}
 
 module Test.ProbabilityCheck.Types
        ( DistributionTestResult(..)
@@ -139,16 +139,17 @@ data State a
     , randomSeed                :: !QCGen
     }
 
-class ProbTestable prop where
-  genValue :: (Show a, RealFrac a, Floating a, Ord a) => prop -> Gen a
+class ProbTestable prop num | prop -> num where
+  genValue :: (Show num, RealFrac num, Floating num, Ord num) => prop -> Gen num
 
-{-
-instance (Show a, RealFrac a, Floating a, Ord a) => ProbTestable a where
+instance ProbTestable Double Double where
   genValue a = return a
--}
 
-instance (Arbitrary arg, ProbTestable prop) => ProbTestable (arg -> prop) where
-  genValue f = arbitrary >>= genValue . f
+instance (Arbitrary arg, ProbTestable prop num) => ProbTestable (arg -> prop) num where
+  genValue f = do
+    arg <- arbitrary :: Gen arg
+    let prop = f arg :: prop
+    genValue prop :: Gen num
 
 data FoobarResult = FoobarResult
 
