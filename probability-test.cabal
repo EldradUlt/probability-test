@@ -37,7 +37,7 @@ Test-Suite probability-test-tests
     , reflection == 1.5.*
 
 library
-  exposed-modules:     Test.ProbabilityCheck Test.ProbabilityCheck.EBS Test.Tasty.ProbabilityCheck
+  exposed-modules:     Test.ProbabilityCheck Test.ProbabilityCheck.EBS Test.Tasty.ProbabilityCheck Test.ProbabilityCheck.Types
   -- other-modules:       
   other-extensions:    MultiParamTypeClasses, FlexibleInstances
   Ghc-Options: -Wall -threaded -rtsopts -auto-all -fprof-auto -caf-all

@@ -6,81 +6,15 @@ module Test.ProbabilityCheck.EBS
        , empiricalBernstienStopping
        ) where
 
-import Data.Conduit (Sink, Conduit, await, yield, (=$=), (=$), awaitForever, addCleanup)
+import Data.Conduit (Sink, Conduit, await, yield, (=$), awaitForever, addCleanup)
 import qualified Data.Conduit.List as CL
-import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Ratio ((%))
 import System.IO ( hSetBuffering, BufferMode(NoBuffering), stdout)
 import System.ProgressBar (progressBar, msg, exact)
 import Control.Concurrent (threadDelay)
-import Test.QuickCheck.Property (succeeded, failed, rejected, Result(reason))
-import Test.QuickCheck (Testable(..))
 
--- This probably wants better naming at some point.
-data DistributionTestResult a = DistributionTestResult
-                                { dtrValue :: DistributionTestValue
-                                , dtrTestedMean :: a
-                                , dtrStdDev :: a
-                                , dtrSampleSize :: Integer
-                                , dtrUpperBound :: a
-                                , dtrLowerBound :: a
-                                }
-                              deriving (Show, Eq) 
-
-instance Testable (DistributionTestResult a) where
-  property dtr = property $ case dtrValue dtr of
-    TestZero -> succeeded
-    TestNegative -> failed {reason = "Tested mean less than zero."}
-    TestPositive -> failed {reason = "Tested mean greater than zero."}
-    TestInsufficientSample -> rejected {reason = "Insufficient Samples available."}
-  exhaustive _ = True
-
-data DistributionTestValue = TestZero
-                           | TestNegative
-                           | TestPositive
-                           | TestInsufficientSample
-                           deriving (Show, Eq, Ord)
-
--- StreamStdDev and its basic functions probably want to be moved to
--- another file.
-data StreamStdDev a = StreamStdDev
-    { ssdCount :: !Integer
-    , ssdMean :: !a
-    , ssdS :: !a
-    }
-    deriving (Eq)
-
-instance (Show a, Floating a) => Show (StreamStdDev a) where
-  show ssd@(StreamStdDev count mean s) =
-    "StreamStdDev {ssdCount = " ++ (show count)
-    ++ ", ssdMean = " ++ (show mean)
-    ++ ", ssdStdDev = " ++ (show $ ssdStdDev ssd)
-    ++ ", ssdS = " ++ (show s)
-    ++ "}"
-
-ssdStdDev :: (Floating a) => StreamStdDev a -> a
-ssdStdDev ssd = sqrt ((ssdS ssd) / ((fromIntegral $ ssdCount ssd) - 1))
-
-initSSD :: (Num a) => a -> StreamStdDev a
-initSSD x = StreamStdDev 1 x 0
-
-updateSSD :: (Fractional a) => a -> StreamStdDev a -> StreamStdDev a
-updateSSD x (StreamStdDev prevC prevM prevS) = StreamStdDev {ssdCount = newC, ssdMean = newM, ssdS = newS}
-    where newC = prevC + 1
-          newM = prevM + (x-prevM)/(fromIntegral newC)
-          newS = prevS + (x-prevM)*(x-newM)
-
-ssdConduit :: (Fractional a, Monad m) => Conduit a m (StreamStdDev a)
-ssdConduit = do
-  mFirst <- await
-  case mFirst of
-    Nothing -> return ()
-    Just first -> do
-      yield (initSSD first)
-      void (CL.mapAccum updateSSDPair $ initSSD first) =$= CL.map fst
-        where updateSSDPair a s = (newSSD, (newSSD, a))
-                where newSSD = updateSSD a s
+import Test.ProbabilityCheck.Types
 
 -- | Debugging helper function which is currently not used and should
 -- probably be removed.
@@ -174,16 +108,6 @@ empiricalBernstienStoppingSink eps = do
             mean = ssdMean ssd
             stdDev = ssdStdDev ssd
             count = ssdCount ssd
-
-data EBSState a = EBSState
-    { ebsSSD :: StreamStdDev a
-    , ebsCt :: a
-    , ebsT :: Integer
-    , ebsK :: Integer
-    , ebsX :: a
-    , ebsDk :: a
-    , ebsAlpha :: Rational
-    } deriving (Show)
 
 printEBSConduit :: (Show a, RealFrac a, Floating a, MonadIO m) => a -> a -> a -> Conduit (EBSState a) m (EBSState a)
 printEBSConduit range delta eps = do
