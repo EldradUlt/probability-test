@@ -139,8 +139,8 @@ data State a
     , randomSeed                :: !QCGen
     }
 
-class ProbTestable prop num | prop -> num where
-  genValue :: (Show num, RealFrac num, Floating num, Ord num) => prop -> Gen num
+class (Show num, RealFrac num, Floating num, Ord num) => ProbTestable prop num | prop -> num where
+  genValue :: prop -> Gen num
 
 instance ProbTestable Double Double where
   genValue a = return a

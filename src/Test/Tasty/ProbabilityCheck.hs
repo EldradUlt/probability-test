@@ -19,6 +19,7 @@ import Numeric.Log (Log(..), Precise)
 --import Test.ProbabilityCheck
 --import Test.ProbabilityCheck.EBS
 
+-- *** test :: Arbitrary a => (a -> Approximate b) -> (a -> b) -> Requirements -> TestTree
 
 {-
 -- Assumes conf between 0 and 1.
