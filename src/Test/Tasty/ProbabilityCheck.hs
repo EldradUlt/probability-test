@@ -130,21 +130,26 @@ instance (Real a, Precise a, RealFloat a) => Real (SignedLog a) where
 
 -- Um obviously lacking def.
 instance (Floating a, Precise a, RealFloat a) => Floating (SignedLog a) where
-  sqrt (SignedLog S.Neg _) = SignedLog S.Pos $ realToFrac $ (0/0 :: a)
+  sqrt (SignedLog S.Neg _) = SignedLog S.Pos $ Exp (0/0)
   sqrt (SignedLog s a) = SignedLog s $ sqrt a
-  pi = undefined
-  exp = undefined
-  log = undefined
-  sin = undefined
-  cos = undefined
-  asin = undefined
-  atan = undefined
-  acos = undefined
-  sinh = undefined
-  cosh = undefined
-  asinh = undefined
-  atanh = undefined
-  acosh = undefined
+  pi = error "Todo, define: pi"
+  exp = error "Todo, define: exp"
+  log (SignedLog S.Neg _) = SignedLog S.Pos $ Exp (0/0)
+  log (SignedLog S.Zero _) = SignedLog S.Neg $ Exp (1/0)
+  log (SignedLog S.Pos (Exp a)) | a >  0 = SignedLog S.Pos $ log $ Exp a
+  log (SignedLog S.Pos (Exp a)) | a == 0 = SignedLog S.Zero $ Exp (-1/0)
+  log (SignedLog S.Pos (Exp a)) | a <  0 = SignedLog S.Neg $ log $ Exp $ abs a
+  log (SignedLog S.Pos _) = SignedLog S.Pos $ Exp (0/0)
+  sin = error "Todo, define: sin"
+  cos = error "Todo, define: cos"
+  asin = error "Todo, define: asin"
+  atan = error "Todo, define: atan"
+  acos = error "Todo, define: acos"
+  sinh = error "Todo, define: sinh"
+  cosh = error "Todo, define: cosh"
+  asinh = error "Todo, define: asinh"
+  atanh = error "Todo, define: atanh"
+  acosh = error "Todo, define: acosh"
 
 instance (Fractional a, Precise a, RealFloat a) => Fractional (SignedLog a) where
   fromRational r = case (signOf $ numerator r, signOf $ denominator r) of

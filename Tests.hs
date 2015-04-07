@@ -18,6 +18,7 @@ import Data.List (nub)
 import Test.QuickCheck (Gen, arbitrary, choose, elements, frequency)
 import Data.Monoid (mempty)
 import Data.Ratio (numerator, denominator)
+import Data.Int (Int64)
 
 main :: IO ()
 main =
@@ -30,7 +31,10 @@ main =
     assertResHasVal TestPositive $ oneTenthSourceRangeLimit $$ empiricalBernstienStopping 2 0.05 0.1
   , testCase "Simple empiricalBernstienStopping TestNegative case" $
     assertResHasVal TestNegative $ negOneTenthSourceRangeLimit $$ empiricalBernstienStopping 2 0.05 0.1
+  , testApproximate "HLL test." (HLL.size . foldl (flip HLL.insert) (mempty :: HLL.HyperLogLog $(nat 5))) (fromIntegral . length . nub :: [Int] -> Int64)
   ]
+
+
 
 genHLLConfCorrect :: Gen (SignedLog Double, SignedLog Double)
 genHLLConfCorrect = do
