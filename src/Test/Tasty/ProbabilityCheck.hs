@@ -1,25 +1,74 @@
-{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts, ScopedTypeVariables, FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts, ScopedTypeVariables, FunctionalDependencies, DeriveDataTypeable #-}
 
 module Test.Tasty.ProbabilityCheck
        ( SignedLog(..)
-       , monadicToSource -- temp export to hide warning.
+       , testApproximate
+       -- , ApproxTest(..)
+       , ApproxTestDelta(..), ApproxTestEpsilon(..)
        ) where
 
---import Test.Tasty (TestName, TestTree)
---import Test.Tasty.Providers (singleTest, IsTest(..))
---import Test.QuickCheck (Gen, generate, frequency)
+import Test.Tasty (TestName, TestTree)
+import Test.Tasty.Providers (singleTest, IsTest(..), testPassed, testFailed)
+import Test.Tasty.Options (IsOption(..), OptionDescription(..), safeRead, lookupOption)
+import Test.QuickCheck (Arbitrary(..), Gen, generate)
 --import Control.Monad.IO.Class (MonadIO(..))
-import Data.Conduit (Source)
+import Data.Conduit (Source, ($$))
 import qualified Data.Conduit.List as CL
 import qualified Data.Sign as S
 import Data.Ratio (numerator, denominator)
 import Numeric.Log (Log(..), Precise)
---import Data.Approximate (Approximate(..))
+import Data.Approximate (Approximate(..))
+import Data.Typeable (Typeable)
+import Data.Proxy (Proxy(..))
 
 --import Test.ProbabilityCheck
---import Test.ProbabilityCheck.EBS
+import Test.ProbabilityCheck.EBS (empiricalBernstienStopping)
+import Test.ProbabilityCheck.Types (DistributionTestResult(..), DistributionTestValue(..))
 
--- *** test :: Arbitrary a => (a -> Approximate b) -> (a -> b) -> Requirements -> TestTree
+data ApproxTest a b = ApproxTest
+                      { calcApproximate :: a -> Approximate b
+                      , calcActual :: a -> b
+                      } deriving Typeable
+
+instance (Arbitrary a, Typeable a, Ord b, Typeable b) => IsTest (ApproxTest a b) where
+  run opts (ApproxTest cApp cAct) _ = do
+    let ApproxTestDelta delta = lookupOption opts
+        ApproxTestDelta epsilon = lookupOption opts
+        value :: Gen (SignedLog Double)
+        value = (arbitrary :: Gen a) >>= sampleToValue
+        sampleToValue :: a -> Gen (SignedLog Double)
+        sampleToValue a = let (Approximate conf lo _ hi) = cApp a
+                              act = cAct a
+                              diff = (if lo <= act && act <= hi then 1 else 0) - (SignedLog S.Pos conf)
+                          in return diff
+    r <- (monadicToSource $ generate value) $$ empiricalBernstienStopping 2 delta epsilon
+    return $ case dtrValue r of
+      TestZero -> testPassed "Confidence is accurate."
+      TestPositive -> testPassed "Confidence is lower than actual accuracy."
+      TestNegative -> testFailed "Confidence is incorrectly high."
+      TestInsufficientSample -> testFailed "Unable to generate sufficient samples. This should not be possible."
+  testOptions = return
+    [ Option (Proxy :: Proxy ApproxTestDelta)
+    , Option (Proxy :: Proxy ApproxTestEpsilon)
+    ]
+
+data ApproxTestDelta = ApproxTestDelta {getDelta :: SignedLog Double} deriving (Read, Show, Typeable)
+data ApproxTestEpsilon = ApproxTestEpsilon {getEpsilon :: SignedLog Double} deriving (Read, Show, Typeable)
+
+instance IsOption ApproxTestDelta where
+  defaultValue = ApproxTestDelta 0.05
+  parseValue = safeRead
+  optionName = return "approxtest-delta"
+  optionHelp = return "Acceptable error rate for test."
+
+instance IsOption ApproxTestEpsilon where
+  defaultValue = ApproxTestEpsilon 0.01
+  parseValue = safeRead
+  optionName = return "approxtest-epsilon"
+  optionHelp = return "Minimal innaccurcy in asserted confidences to be considered sufficiently accurate."
+
+testApproximate :: (Arbitrary a, Typeable a, Ord b, Typeable b) => TestName -> (a -> Approximate b) -> (a -> b) -> TestTree
+testApproximate name cApp cAct = singleTest name $ ApproxTest {calcApproximate = cApp, calcActual = cAct}
 
 {-
 -- Assumes conf between 0 and 1.
@@ -43,13 +92,7 @@ monadicToSource ma = CL.unfoldM (\_ -> ma >>= (\a -> return $ Just (a,()))) ()
 data SignedLog a = SignedLog {
   slSign :: S.Sign
   , slLn :: Log a
-  }
-
-instance (Show a, Floating a, Precise a, RealFloat a) => Show (SignedLog a) where
-  show (SignedLog s a) = case s of
-    S.Pos -> show a
-    S.Zero -> show (0 :: Log a)
-    S.Neg -> S.symbol s ++ show a
+  } deriving (Show, Read)
 
 instance (Eq a) => Eq (SignedLog a) where
   (SignedLog sA a) == (SignedLog sB b) = (sA == sB) && (sA == S.Zero || a == b)
