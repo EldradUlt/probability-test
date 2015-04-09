@@ -1,11 +1,11 @@
-{-# LANGUAGE TemplateHaskell, DataKinds, ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell, DataKinds, ScopedTypeVariables, DeriveDataTypeable #-}
 module Main where
 
 --import Test.ProbabilityCheck
 import Test.ProbabilityCheck.EBS
 import Test.Tasty.ProbabilityCheck
 import Test.Tasty (defaultMain, testGroup)
-import Test.Tasty.HUnit (Assertion, assertFailure, testCase)
+import Test.Tasty.HUnit (Assertion, assertFailure, assertString, testCase)
 import Data.Conduit (Source, ZipSource(..), ($=), Conduit, ($$))
 import qualified Data.Conduit.List as CL
 import System.Random.MWC (withSystemRandom)
@@ -15,10 +15,11 @@ import qualified Data.HyperLogLog as HLL
 import Data.Reflection (nat)
 import Data.Approximate (Approximate(..))
 import Data.List (nub)
-import Test.QuickCheck (Gen, arbitrary, choose, elements, frequency)
+import Test.QuickCheck (Gen, Arbitrary(..), choose, elements, frequency, sample')
 import Data.Monoid (mempty)
 import Data.Ratio (numerator, denominator)
 import Data.Int (Int64)
+import Data.Typeable (Typeable)
 
 main :: IO ()
 main =
@@ -26,15 +27,30 @@ main =
   testGroup "probability-test's Tests"
   [
     testCase "Simple empiricalBernstienStopping TestZero case" $
-    assertResHasVal TestZero $ zeroSourceRangeLimit $$ empiricalBernstienStopping 2 0.05 0.1
+    assertResHasVal TestZero $ zeroSourceRangeLimit $$ empiricalBernstienStopping 2 0.05 0.01
   , testCase "Simple empiricalBernstienStopping TestPositive case" $
-    assertResHasVal TestPositive $ oneTenthSourceRangeLimit $$ empiricalBernstienStopping 2 0.05 0.1
+    assertResHasVal TestPositive $ oneTenthSourceRangeLimit $$ empiricalBernstienStopping 2 0.05 0.01
   , testCase "Simple empiricalBernstienStopping TestNegative case" $
-    assertResHasVal TestNegative $ negOneTenthSourceRangeLimit $$ empiricalBernstienStopping 2 0.05 0.1
+    assertResHasVal TestNegative $ negOneTenthSourceRangeLimit $$ empiricalBernstienStopping 2 0.05 0.01
   , testApproximate "HLL test." (HLL.size . foldl (flip HLL.insert) (mempty :: HLL.HyperLogLog $(nat 5))) (fromIntegral . length . nub :: [Int] -> Int64)
+  , testApproximate "Approx simple pass." simpleCorrectApprox simpleActual
+  , testApproximate "Approx simple fail." simpleIncorrectApprox simpleActual
+  --, testCase "Foobar" $ sample' (arbitrary :: Gen ZeroToNintyNine) >>= assertString . show
   ]
 
+simpleCorrectApprox :: a -> Approximate Int
+simpleCorrectApprox _ = Approximate 0.9 10 55 99
 
+simpleIncorrectApprox :: a -> Approximate Int
+simpleIncorrectApprox _ = Approximate 0.91 10 55 99
+
+data ZeroToNintyNine = ZeroToNintyNine {simpleActual :: Int} deriving (Typeable)
+
+instance Show ZeroToNintyNine where
+  show = show . simpleActual
+
+instance Arbitrary ZeroToNintyNine where
+  arbitrary = choose (0,99) >>= return . ZeroToNintyNine
 
 genHLLConfCorrect :: Gen (SignedLog Double, SignedLog Double)
 genHLLConfCorrect = do
@@ -70,7 +86,7 @@ limitRange :: Double -> Double -> Conduit Double IO Double
 limitRange lo hi = CL.map (\a -> max lo $ min hi a)
 
 rIO :: Double -> IO Double
-rIO mean = withSystemRandom (\gen -> normal mean 1 gen :: IO Double)
+rIO mean = withSystemRandom (\gen -> normal mean 0.1 gen :: IO Double)
 
 pIO :: Double -> Double -> Gen (Double, Double)
 pIO meanA meanB = do
@@ -85,10 +101,7 @@ zeroSourceRangeLimit :: Source IO Double
 zeroSourceRangeLimit = zeroSource $= limitRange (-1) 1
 
 oneTenthSourceRangeLimit :: Source IO Double
-oneTenthSourceRangeLimit = oneTenthSource $= limitRange (-0.9) 1.1
+oneTenthSourceRangeLimit = (normalDoubleSource 0.01) $= limitRange (-0.9) 1.1
 
 negOneTenthSourceRangeLimit :: Source IO Double
-negOneTenthSourceRangeLimit = (normalDoubleSource (-0.1)) $= limitRange (-1.1) 0.9
-
-oneTenthSource :: Source IO Double
-oneTenthSource = normalDoubleSource 0.1
+negOneTenthSourceRangeLimit = (normalDoubleSource (-0.01)) $= limitRange (-1.1) 0.9

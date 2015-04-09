@@ -10,7 +10,7 @@ module Test.Tasty.ProbabilityCheck
 import Test.Tasty (TestName, TestTree)
 import Test.Tasty.Providers (singleTest, IsTest(..), testPassed, testFailed)
 import Test.Tasty.Options (IsOption(..), OptionDescription(..), safeRead, lookupOption)
-import Test.QuickCheck (Arbitrary(..), Gen, generate)
+import Test.QuickCheck (Arbitrary(..), Gen, generate, resize)
 --import Control.Monad.IO.Class (MonadIO(..))
 import Data.Conduit (Source, ($$))
 import qualified Data.Conduit.List as CL
@@ -41,7 +41,7 @@ instance (Arbitrary a, Typeable a, Ord b, Typeable b) => IsTest (ApproxTest a b)
                               act = cAct a
                               diff = (if lo <= act && act <= hi then 1 else 0) - (SignedLog S.Pos conf)
                           in return diff
-    r <- (monadicToSource $ generate value) $$ empiricalBernstienStopping 2 delta epsilon
+    r <- (monadicToSource $ generate $ resize 10000 value) $$ empiricalBernstienStopping 2 delta epsilon
     return $ case dtrValue r of
       TestZero -> testPassed "Confidence is accurate."
       TestPositive -> testPassed "Confidence is lower than actual accuracy."
