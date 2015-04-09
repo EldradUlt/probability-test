@@ -29,9 +29,9 @@ main =
     testCase "Simple empiricalBernstienStopping TestZero case" $
     assertResHasVal TestZero $ zeroSourceRangeLimit $$ empiricalBernstienStopping 2 0.05 0.01
   , testCase "Simple empiricalBernstienStopping TestPositive case" $
-    assertResHasVal TestPositive $ oneTenthSourceRangeLimit $$ empiricalBernstienStopping 2 0.05 0.01
+    assertResHasVal TestPositive $ oneHundrethSourceRangeLimit $$ empiricalBernstienStopping 2 0.05 0.01
   , testCase "Simple empiricalBernstienStopping TestNegative case" $
-    assertResHasVal TestNegative $ negOneTenthSourceRangeLimit $$ empiricalBernstienStopping 2 0.05 0.01
+    assertResHasVal TestNegative $ negOneHundrethSourceRangeLimit $$ empiricalBernstienStopping 2 0.05 0.01
   , testApproximate "HLL test." (HLL.size . foldl (flip HLL.insert) (mempty :: HLL.HyperLogLog $(nat 5))) (fromIntegral . length . nub :: [Int] -> Int64)
   , testApproximate "Approx simple pass." simpleCorrectApprox simpleActual
   , testApproximate "Approx simple fail." simpleIncorrectApprox simpleActual
@@ -100,8 +100,8 @@ zeroSource = normalDoubleSource 0
 zeroSourceRangeLimit :: Source IO Double
 zeroSourceRangeLimit = zeroSource $= limitRange (-1) 1
 
-oneTenthSourceRangeLimit :: Source IO Double
-oneTenthSourceRangeLimit = (normalDoubleSource 0.01) $= limitRange (-0.9) 1.1
+oneHundrethSourceRangeLimit :: Source IO Double
+oneHundrethSourceRangeLimit = (normalDoubleSource 0.01) $= limitRange (-0.9) 1.1
 
-negOneTenthSourceRangeLimit :: Source IO Double
-negOneTenthSourceRangeLimit = (normalDoubleSource (-0.01)) $= limitRange (-1.1) 0.9
+negOneHundrethSourceRangeLimit :: Source IO Double
+negOneHundrethSourceRangeLimit = (normalDoubleSource (-0.01)) $= limitRange (-1.1) 0.9

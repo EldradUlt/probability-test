@@ -41,7 +41,7 @@ instance (Arbitrary a, Typeable a, Ord b, Typeable b) => IsTest (ApproxTest a b)
                               act = cAct a
                               diff = (if lo <= act && act <= hi then 1 else 0) - (SignedLog S.Pos conf)
                           in return diff
-    r <- (monadicToSource $ generate $ resize 10000 value) $$ empiricalBernstienStopping 2 delta epsilon
+    r <- (monadicToSource $ generate $ resize 1000 value) $$ empiricalBernstienStopping 2 delta epsilon
     return $ case dtrValue r of
       TestZero -> testPassed "Confidence is accurate."
       TestPositive -> testPassed "Confidence is lower than actual accuracy."
