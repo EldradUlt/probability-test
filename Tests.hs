@@ -8,8 +8,8 @@ import Test.Tasty (defaultMain, testGroup)
 import Test.Tasty.HUnit (Assertion, assertFailure, assertString, testCase)
 import Data.Conduit (Source, ZipSource(..), ($=), Conduit, ($$))
 import qualified Data.Conduit.List as CL
-import System.Random.MWC (withSystemRandom)
-import System.Random.MWC.Distributions (normal)
+import System.Random.MWC (createSystemRandom, GenIO)
+import System.Random.MWC.Distributions (normal, uniformPermutation)
 import Control.Applicative ((<*>))
 import qualified Data.HyperLogLog as HLL
 import Data.Reflection (nat)
@@ -20,23 +20,37 @@ import Data.Monoid (mempty)
 import Data.Ratio (numerator, denominator)
 import Data.Int (Int64)
 import Data.Typeable (Typeable)
+import qualified Data.Vector as V
 
 main :: IO ()
-main =
+main = do
+  mwcGen <- createSystemRandom
   defaultMain $
-  testGroup "probability-test's Tests"
-  [
-    testCase "Simple empiricalBernstienStopping TestZero case" $
-    assertResHasVal TestZero $ zeroSourceRangeLimit $$ empiricalBernstienStopping 2 0.05 0.01
-  , testCase "Simple empiricalBernstienStopping TestPositive case" $
-    assertResHasVal TestPositive $ oneHundrethSourceRangeLimit $$ empiricalBernstienStopping 2 0.05 0.01
-  , testCase "Simple empiricalBernstienStopping TestNegative case" $
-    assertResHasVal TestNegative $ negOneHundrethSourceRangeLimit $$ empiricalBernstienStopping 2 0.05 0.01
-  , testApproximate "HLL test." (HLL.size . foldl (flip HLL.insert) (mempty :: HLL.HyperLogLog $(nat 5))) (fromIntegral . length . nub :: [Int] -> Int64)
-  , testApproximate "Approx simple pass." simpleCorrectApprox simpleActual
-  , testApproximate "Approx simple fail." simpleIncorrectApprox simpleActual
-  --, testCase "Foobar" $ sample' (arbitrary :: Gen ZeroToNintyNine) >>= assertString . show
-  ]
+    testGroup "probability-test's Tests"
+    [
+      {-testCase "Simple empiricalBernstienStopping TestZero case" $
+      assertResHasVal TestZero $ zeroSourceRangeLimit mwcGen $$ empiricalBernstienStopping 2 0.05 0.01
+    , testCase "Simple empiricalBernstienStopping TestPositive case" $
+      assertResHasVal TestPositive $ oneHundrethSourceRangeLimit mwcGen $$ empiricalBernstienStopping 2 0.05 0.01
+    , testCase "Simple empiricalBernstienStopping TestNegative case" $
+      assertResHasVal TestNegative $ negOneHundrethSourceRangeLimit mwcGen $$ empiricalBernstienStopping 2 0.05 0.01
+    , testApproximate "HLL test." (HLL.size . foldl (flip HLL.insert) (mempty :: HLL.HyperLogLog $(nat 5))) (fromIntegral . length . nub :: [Int] -> Int64)
+    , testApproximate "Approx simple pass." simpleCorrectApprox simpleActual
+    , -}testApproximate "Approx simple fail. *THIS SHOULD FAIL*" simpleIncorrectApprox simpleActual
+    , testCase "Simulated 'Approx simple fail' with Doubles and MWC random." $
+      assertResHasVal TestNegative $ simulatedApproxSource mwcGen (0.91::Double) $$ empiricalBernstienStopping 2 0.05 0.01
+    , testCase "Simulated 'Approx simple fail' with SignedLog Doubles and MWC random." $
+      assertResHasVal TestNegative $ simulatedApproxSource mwcGen (0.91::SignedLog Double) $$ empiricalBernstienStopping 2 0.05 0.01
+      --, testCase "Foobar" $ sample' (arbitrary :: Gen ZeroToNintyNine) >>= assertString . show
+    ]
+
+simulatedApproxSource :: (Num a) => GenIO -> a -> Source IO a
+simulatedApproxSource mwcGen conf = sourceZeroToNine mwcGen $= CL.map (\r -> (if r == 0 then 0 else 1) - conf)
+
+sourceZeroToNine :: GenIO -> Source IO Int
+sourceZeroToNine mwcGen = CL.unfoldM (\_ -> do
+                                         lst <- uniformPermutation 10 mwcGen
+                                         return $ Just (V.head lst, ())) ()
 
 simpleCorrectApprox :: a -> Approximate Int
 simpleCorrectApprox _ = Approximate 0.9 10 55 99
@@ -74,19 +88,19 @@ assertResHasVal a bIO = do
     else assertFailure (  "Expected: " ++ (show a)
                        ++ "\nGot: " ++ (show b) )
 
-tupleSource :: Double -> Double -> Source IO (Double, Double)
-tupleSource a b = getZipSource $ ZipSource ((normalDoubleSource a) $= CL.map (\x y -> (x,y))) <*> ZipSource (normalDoubleSource b)
+tupleSource :: GenIO -> Double -> Double -> Source IO (Double, Double)
+tupleSource mwcGen a b = getZipSource $ ZipSource ((normalDoubleSource mwcGen a) $= CL.map (\x y -> (x,y))) <*> ZipSource (normalDoubleSource mwcGen b)
 
-normalDoubleSource :: Double -> Source IO Double
-normalDoubleSource mean = CL.unfoldM (\_ -> do
-                                         r <- rIO mean
+normalDoubleSource :: GenIO -> Double -> Source IO Double
+normalDoubleSource mwcGen mean = CL.unfoldM (\_ -> do
+                                         r <- rIO mwcGen mean
                                          return $ Just (r, ())) ()
 
 limitRange :: Double -> Double -> Conduit Double IO Double
 limitRange lo hi = CL.map (\a -> max lo $ min hi a)
 
-rIO :: Double -> IO Double
-rIO mean = withSystemRandom (\gen -> normal mean 0.1 gen :: IO Double)
+rIO :: GenIO -> Double -> IO Double
+rIO mwcGen mean = normal mean 0.1 mwcGen
 
 pIO :: Double -> Double -> Gen (Double, Double)
 pIO meanA meanB = do
@@ -94,14 +108,14 @@ pIO meanA meanB = do
   b <- choose (meanB-1,meanB+1) -- Uniform distribution over meanB +/- 1.
   return (a, b)
 
-zeroSource :: Source IO Double
-zeroSource = normalDoubleSource 0
+zeroSource :: GenIO -> Source IO Double
+zeroSource mwcGen = normalDoubleSource mwcGen 0
 
-zeroSourceRangeLimit :: Source IO Double
-zeroSourceRangeLimit = zeroSource $= limitRange (-1) 1
+zeroSourceRangeLimit :: GenIO -> Source IO Double
+zeroSourceRangeLimit mwcGen = zeroSource mwcGen $= limitRange (-1) 1
 
-oneHundrethSourceRangeLimit :: Source IO Double
-oneHundrethSourceRangeLimit = (normalDoubleSource 0.01) $= limitRange (-0.9) 1.1
+oneHundrethSourceRangeLimit :: GenIO -> Source IO Double
+oneHundrethSourceRangeLimit mwcGen = (normalDoubleSource mwcGen 0.01) $= limitRange (-0.9) 1.1
 
-negOneHundrethSourceRangeLimit :: Source IO Double
-negOneHundrethSourceRangeLimit = (normalDoubleSource (-0.01)) $= limitRange (-1.1) 0.9
+negOneHundrethSourceRangeLimit :: GenIO -> Source IO Double
+negOneHundrethSourceRangeLimit mwcGen  = (normalDoubleSource mwcGen (-0.01)) $= limitRange (-1.1) 0.9

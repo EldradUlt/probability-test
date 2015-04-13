@@ -35,6 +35,7 @@ Test-Suite probability-test-tests
     , containers == 0.5.*
     , hyperloglog == 0.3.*
     , reflection == 1.5.*
+    , vector == 0.10.*
 
 library
   exposed-modules:     Test.ProbabilityCheck Test.ProbabilityCheck.EBS Test.Tasty.ProbabilityCheck Test.ProbabilityCheck.Types
