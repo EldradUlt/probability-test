@@ -33,7 +33,7 @@ data ApproxTest a b = ApproxTest
 instance (Arbitrary a, Typeable a, Ord b, Typeable b) => IsTest (ApproxTest a b) where
   run opts (ApproxTest cApp cAct) _ = do
     let ApproxTestDelta delta = lookupOption opts
-        ApproxTestDelta epsilon = lookupOption opts
+        ApproxTestEpsilon epsilon = lookupOption opts
         value :: Gen (SignedLog Double)
         value = (arbitrary :: Gen a) >>= sampleToValue
         sampleToValue :: a -> Gen (SignedLog Double)
