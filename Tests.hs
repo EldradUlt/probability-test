@@ -5,7 +5,7 @@ module Main where
 import Test.ProbabilityCheck.EBS
 import Test.Tasty.ProbabilityCheck
 import Test.Tasty (defaultMain, testGroup)
-import Test.Tasty.HUnit (Assertion, assertFailure, assertString, testCase)
+import Test.Tasty.HUnit (Assertion, assertFailure, testCase)
 import Data.Conduit (Source, ZipSource(..), ($=), Conduit, ($$))
 import qualified Data.Conduit.List as CL
 import System.Random.MWC (createSystemRandom, GenIO)
@@ -15,11 +15,12 @@ import qualified Data.HyperLogLog as HLL
 import Data.Reflection (nat)
 import Data.Approximate (Approximate(..))
 import Data.List (nub)
-import Test.QuickCheck (Gen, Arbitrary(..), choose, elements, frequency, sample')
+import Test.QuickCheck (Gen, Arbitrary(..), choose, elements, frequency)
 import Data.Monoid (mempty)
 import Data.Ratio (numerator, denominator)
 import Data.Int (Int64)
 import Data.Typeable (Typeable)
+import Numeric.Log.Signed (SignedLog)
 import qualified Data.Vector as V
 
 main :: IO ()
@@ -28,7 +29,7 @@ main = do
   defaultMain $
     testGroup "probability-test's Tests"
     [
-      {-testCase "Simple empiricalBernstienStopping TestZero case" $
+      testCase "Simple empiricalBernstienStopping TestZero case" $
       assertResHasVal TestZero $ zeroSourceRangeLimit mwcGen $$ empiricalBernstienStopping 2 0.05 0.01
     , testCase "Simple empiricalBernstienStopping TestPositive case" $
       assertResHasVal TestPositive $ oneHundrethSourceRangeLimit mwcGen $$ empiricalBernstienStopping 2 0.05 0.01
@@ -36,12 +37,12 @@ main = do
       assertResHasVal TestNegative $ negOneHundrethSourceRangeLimit mwcGen $$ empiricalBernstienStopping 2 0.05 0.01
     , testApproximate "HLL test." (HLL.size . foldl (flip HLL.insert) (mempty :: HLL.HyperLogLog $(nat 5))) (fromIntegral . length . nub :: [Int] -> Int64)
     , testApproximate "Approx simple pass." simpleCorrectApprox simpleActual
-    , -}testApproximate "Approx simple fail. *THIS SHOULD FAIL*" simpleIncorrectApprox simpleActual
-    , testCase "Simulated 'Approx simple fail' with Doubles and MWC random." $
+    , testApproximate "Approx simple fail. *THIS SHOULD FAIL*" simpleIncorrectApprox simpleActual
+    {-, testCase "Simulated 'Approx simple fail' with Doubles and MWC random." $
       assertResHasVal TestNegative $ simulatedApproxSource mwcGen (0.91::Double) $$ empiricalBernstienStopping 2 0.05 0.01
     , testCase "Simulated 'Approx simple fail' with SignedLog Doubles and MWC random." $
       assertResHasVal TestNegative $ simulatedApproxSource mwcGen (0.91::SignedLog Double) $$ empiricalBernstienStopping 2 0.05 0.01
-      --, testCase "Foobar" $ sample' (arbitrary :: Gen ZeroToNintyNine) >>= assertString . show
+    -}
     ]
 
 simulatedApproxSource :: (Num a) => GenIO -> a -> Source IO a
