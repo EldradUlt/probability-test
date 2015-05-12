@@ -5,7 +5,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 
-module Test.Tasty.ProbabilityCheck
+module Test.Tasty.TestApproximate
        ( testApproximate
        , ApproxTest(..)
        , ApproxTestDelta(..), ApproxTestEpsilon(..)
