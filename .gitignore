@@ -4,3 +4,7 @@ dist/*
 # Emacs files #
 *~
 \#*\#
+
+# Cabal Sandbox #
+.cabal-sandbox/
+cabal.sandbox.config
