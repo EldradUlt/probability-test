@@ -39,7 +39,7 @@ Test-Suite probability-test-tests
     , log-domain == 0.10.*
 
 library
-  exposed-modules:     Test.ProbabilityCheck Test.ProbabilityCheck.EBS Test.Tasty.TestApproximate Test.ProbabilityCheck.Types Test.TestApproximate
+  exposed-modules:     Test.ProbabilityCheck Test.ProbabilityCheck.Internal Test.Tasty.TestApproximate Test.ProbabilityCheck.Types Test.TestApproximate
   -- other-modules:       
   other-extensions:    MultiParamTypeClasses, FlexibleInstances
   Ghc-Options: -Wall -threaded -rtsopts -auto-all -fprof-auto -caf-all

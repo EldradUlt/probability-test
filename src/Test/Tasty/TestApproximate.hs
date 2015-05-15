@@ -19,7 +19,7 @@ import Data.Approximate (Approximate)
 import Data.Typeable (Typeable)
 import Data.Proxy (Proxy(..))
 import Test.QuickCheck (Arbitrary)
-import Test.ProbabilityCheck.Types (DistributionTestResult(..), DistributionTestValue(..))
+import Test.ProbabilityCheck.Internal (DistributionTestResult(..), DistributionTestValue(..))
 import Test.TestApproximate (testApproximateWithResult, stdArgs, ApproxTestArgs(..), ApproxTestResult(..))
 
 data ApproxTest a b = ApproxTest

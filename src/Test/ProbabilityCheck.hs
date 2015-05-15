@@ -7,15 +7,15 @@ module Test.ProbabilityCheck
        , FoobarResult(..)
        ) where
 
-import Test.QuickCheck (Testable(..), property)
+--import Test.QuickCheck (Testable(..), property)
 import Test.QuickCheck.Gen (Gen(..))
-import Test.QuickCheck.Property (Property(..), Prop(..))
+--import Test.QuickCheck.Property (Property(..), Prop(..))
 import Test.QuickCheck.Random (QCGen, newQCGen)
 import Test.QuickCheck.Text (withStdioTerminal, withNullTerminal)
-import Data.Conduit (Conduit)
+--import Data.Conduit (Conduit)
 
 import Test.ProbabilityCheck.Types
---import Test.ProbabilityCheck.EBS
+import Test.ProbabilityCheck.Internal(DistributionTestResult(..))
 
 probabilityCheck :: (ProbTestable prop num) => prop -> IO ()
 probabilityCheck = probabilityCheckWith stdArgs

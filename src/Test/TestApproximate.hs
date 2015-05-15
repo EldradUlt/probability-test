@@ -19,8 +19,7 @@ import Data.Approximate (Approximate(..))
 import Data.Conduit (Source, ($$))
 import qualified Data.Conduit.List as CL
 import Numeric.Log.Signed (SignedLog)
-import Test.ProbabilityCheck.Types (DistributionTestResult(..), DistributionTestValue(..))
-import Test.ProbabilityCheck.EBS(empiricalBernstienStopping)
+import Test.ProbabilityCheck.Internal (DistributionTestResult(..), DistributionTestValue(..), empiricalBernstienStopping)
 
 data ApproxTestArgs = ApproxTestArgs
                       { ataDelta :: SignedLog Double

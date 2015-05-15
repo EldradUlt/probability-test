@@ -1,27 +1,22 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts, ScopedTypeVariables #-}
 
-module Test.ProbabilityCheck.EBS
-       ( DistributionTestResult(..), DistributionTestValue(..)
-       , conduitPrint
+module Test.ProbabilityCheck.Internal
+       ( DistributionTestResult(..)
+       , DistributionTestValue(..)
+       , StreamStdDev(..), ssdStdDev
+       , initSSD, updateSSD, ssdConduit
+       , EBSState(..)
        , empiricalBernstienStopping
        ) where
 
-import Data.Conduit (Sink, Conduit, await, yield, (=$), awaitForever, addCleanup)
+import Data.Conduit (Sink, Conduit, await, yield, (=$), (=$=), awaitForever, addCleanup)
 import qualified Data.Conduit.List as CL
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Ratio ((%))
 import System.IO ( hSetBuffering, BufferMode(NoBuffering), stdout)
 import System.ProgressBar (progressBar, msg, exact)
 import Control.Concurrent (threadDelay)
-
-import Test.ProbabilityCheck.Types
-
--- | Debugging helper function which is currently not used and should
--- probably be removed.
-conduitPrint :: (Show a, MonadIO m) => Conduit a m a
-conduitPrint = CL.mapM (\x -> do
-                           liftIO (print x) 
-                           return x)
+import Control.Monad (void)
 
 -- http://machinelearning.org/archive/icml2008/papers/523.pdf
 --
@@ -125,4 +120,67 @@ printEBSConduit range delta eps = do
                   b = (ssdStdDev ssd) * sqrt(2*1.1*log((fromInteger $ 3*k*(k+1))/delta))
                   c = 3*1.1*range*log((fromInteger $ 3*k*(k+1))/delta)
 
+data DistributionTestResult a = DistributionTestResult
+                                { dtrValue :: DistributionTestValue
+                                , dtrTestedMean :: a
+                                , dtrStdDev :: a
+                                , dtrSampleSize :: Integer
+                                , dtrUpperBound :: a
+                                , dtrLowerBound :: a
+                                }
+                              deriving (Show, Eq) 
+
+data DistributionTestValue = TestZero
+                           | TestNegative
+                           | TestPositive
+                           | TestInsufficientSample
+                           deriving (Show, Eq, Ord)
+
+data StreamStdDev a = StreamStdDev
+    { ssdCount :: !Integer
+    , ssdMean :: !a
+    , ssdS :: !a
+    }
+    deriving (Eq)
+
+instance (Show a, Floating a) => Show (StreamStdDev a) where
+  show ssd@(StreamStdDev count mean s) =
+    "StreamStdDev {ssdCount = " ++ (show count)
+    ++ ", ssdMean = " ++ (show mean)
+    ++ ", ssdStdDev = " ++ (show $ ssdStdDev ssd)
+    ++ ", ssdS = " ++ (show s)
+    ++ "}"
+
+ssdStdDev :: (Floating a) => StreamStdDev a -> a
+ssdStdDev ssd = sqrt ((ssdS ssd) / ((fromIntegral $ ssdCount ssd) - 1))
+
+initSSD :: (Num a) => a -> StreamStdDev a
+initSSD x = StreamStdDev 1 x 0
+
+updateSSD :: (Fractional a) => a -> StreamStdDev a -> StreamStdDev a
+updateSSD x (StreamStdDev prevC prevM prevS) = StreamStdDev {ssdCount = newC, ssdMean = newM, ssdS = newS}
+    where newC = prevC + 1
+          newM = prevM + (x-prevM)/(fromIntegral newC)
+          newS = prevS + (x-prevM)*(x-newM)
+
+ssdConduit :: (Fractional a, Monad m) => Conduit a m (StreamStdDev a)
+ssdConduit = do
+  mFirst <- await
+  case mFirst of
+    Nothing -> return ()
+    Just first -> do
+      yield (initSSD first)
+      void (CL.mapAccum updateSSDPair $ initSSD first) =$= CL.map fst
+        where updateSSDPair a s = (newSSD, (newSSD, a))
+                where newSSD = updateSSD a s
+
+data EBSState a = EBSState
+    { ebsSSD :: StreamStdDev a
+    , ebsCt :: a
+    , ebsT :: Integer
+    , ebsK :: Integer
+    , ebsX :: a
+    , ebsDk :: a
+    , ebsAlpha :: Rational
+    } deriving (Show)
 
