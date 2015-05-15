@@ -3,9 +3,6 @@
 module Test.ProbabilityCheck.Internal
        ( DistributionTestResult(..)
        , DistributionTestValue(..)
-       , StreamStdDev(..), ssdStdDev
-       , initSSD, updateSSD, ssdConduit
-       , EBSState(..)
        , empiricalBernstienStopping
        , monadicToSource
        ) where
@@ -19,10 +16,16 @@ import System.ProgressBar (progressBar, msg, exact)
 import Control.Concurrent (threadDelay)
 import Control.Monad (void)
 
+-- | Algorithm used internally to determine how many samples are
+-- needed and whether the tested mean is equal to zero or has an
+-- absolute value greater than epsilon.
+--
+-- This is a slight modification of the algorithm described in the
+-- following paper:
+--
 -- http://machinelearning.org/archive/icml2008/papers/523.pdf
 --
--- Assertions I believe can be made, if range is the magnitude of
--- range of possible values in the population.
+-- The following assertions can be made.
 --
 -- 1) This will stop in finite time.
 --
@@ -32,7 +35,20 @@ import Control.Monad (void)
 -- 3) If the absolute value of the actual mean of the population is
 -- greater than eps the test will return the appropriate TestPositive
 -- or TestNegative at least (1-delta) of the time.
-empiricalBernstienStopping :: (Show a, RealFrac a, Floating a, Ord a, MonadIO m) => a -> a -> a -> Sink a m (DistributionTestResult a)
+empiricalBernstienStopping :: (Show a, RealFrac a, Floating a, Ord a, MonadIO m)
+                              => a -- ^ The size of the range that all
+                                   -- possible input values will fall
+                                   -- within.
+                              -> a -- ^ 'Delta' the allowable error rate for the test.
+                              -> a -- ^ 'Epsilon' the minimal
+                                   -- difference between the tested
+                                   -- mean and zero to be considered
+                                   -- not equal to zero.
+                              -> Sink a m (DistributionTestResult a)
+                              -- ^ A sink which when attached to a
+                              -- source of values will test whether
+                              -- they have a mean equal to, greater
+                              -- than, or less than zero.
 empiricalBernstienStopping range delta eps = do
   result <- ssdConduit
             =$ (CL.drop 1 >> awaitForever yield)
@@ -41,6 +57,7 @@ empiricalBernstienStopping range delta eps = do
             =$ empiricalBernstienStoppingSink eps
   return result
 
+-- Conduit which handles the calculations between each step.
 empiricalBernstienStoppingConduit :: forall a m. (RealFrac a, Floating a, Ord a, Monad m)
                                      => Integer -> Integer -> a -> a -> Conduit (StreamStdDev a) m (EBSState a)
 empiricalBernstienStoppingConduit t k range delta = do
@@ -76,6 +93,8 @@ empiricalBernstienStoppingConduit t k range delta = do
              newT = t+1
              newK = if newT > floor(beta^k) then k+1 else k
 
+-- Sink which checks if the stopping condition has been met and if so
+-- returns the results.
 empiricalBernstienStoppingSink :: (RealFrac a, Floating a, Ord a, Monad m) => a -> Sink (EBSState a) m (DistributionTestResult a)
 empiricalBernstienStoppingSink eps = do
   mNext <- await
@@ -105,6 +124,8 @@ empiricalBernstienStoppingSink eps = do
             stdDev = ssdStdDev ssd
             count = ssdCount ssd
 
+-- Printing function which displays progress and estimated
+-- termination.
 printEBSConduit :: (Show a, RealFrac a, Floating a, MonadIO m) => a -> a -> a -> Conduit (EBSState a) m (EBSState a)
 printEBSConduit range delta eps = do
   liftIO $ hSetBuffering stdout NoBuffering
@@ -121,26 +142,39 @@ printEBSConduit range delta eps = do
                   b = (ssdStdDev ssd) * sqrt(2*1.1*log((fromInteger $ 3*k*(k+1))/delta))
                   c = 3*1.1*range*log((fromInteger $ 3*k*(k+1))/delta)
 
-data DistributionTestResult a = DistributionTestResult
-                                { dtrValue :: DistributionTestValue
-                                , dtrTestedMean :: a
-                                , dtrStdDev :: a
-                                , dtrSampleSize :: Integer
-                                , dtrUpperBound :: a
-                                , dtrLowerBound :: a
-                                }
-                              deriving (Show, Eq) 
+-- | The result of a test.
+data DistributionTestResult a =
+  DistributionTestResult
+  { dtrValue :: DistributionTestValue -- ^ The assertion that the mean
+                                      -- is greater than, less than,
+                                      -- or equal to zero.
+  , dtrTestedMean :: a -- ^ The mean of the observed samples.
+  , dtrStdDev :: a     -- ^ The standard devitation of the observed
+                       -- samples.
+  , dtrSampleSize :: Integer -- ^ Number of samples taken.
+  , dtrUpperBound :: a -- ^ The upper bound which can be asserted with
+                       -- the requested confidence for the
+                       -- population's mean.
+  , dtrLowerBound :: a -- ^ The lower bound which can be asserted with
+                       -- the requested confidence for the
+                       -- population's mean.
+  }
+  deriving (Show, Eq) 
 
-data DistributionTestValue = TestZero
-                           | TestNegative
-                           | TestPositive
-                           | TestInsufficientSample
-                           deriving (Show, Eq, Ord)
+-- | Possible values for a test result.
+data DistributionTestValue =
+    TestZero     -- ^ Assert that the mean is equal to zero.
+  | TestNegative -- ^ Assert that the mean is less than zero.
+  | TestPositive -- ^ Assert that the mean is greater than zero.
+  | TestInsufficientSample -- ^ Not enough samples available.
+  deriving (Show, Eq, Ord)
 
+-- Helper data type for keeping a running mean and standard deviation
+-- (Knuth 1998, The Art of Computer Programming).
 data StreamStdDev a = StreamStdDev
-    { ssdCount :: !Integer
-    , ssdMean :: !a
-    , ssdS :: !a
+    { ssdCount :: !Integer -- ^ Total elements seen.
+    , ssdMean :: !a -- ^ Mean.
+    , ssdS :: !a -- ^ Internal value from which the stddev is calculated.
     }
     deriving (Eq)
 
@@ -152,18 +186,23 @@ instance (Show a, Floating a) => Show (StreamStdDev a) where
     ++ ", ssdS = " ++ (show s)
     ++ "}"
 
+-- Accessor for virtual stddev value in the StreamStdDev type.
 ssdStdDev :: (Floating a) => StreamStdDev a -> a
 ssdStdDev ssd = sqrt ((ssdS ssd) / ((fromIntegral $ ssdCount ssd) - 1))
 
+-- Create a StreamStdDev from the first value.
 initSSD :: (Num a) => a -> StreamStdDev a
 initSSD x = StreamStdDev 1 x 0
 
+-- Insert a single value into a StreamStdDev
 updateSSD :: (Fractional a) => a -> StreamStdDev a -> StreamStdDev a
 updateSSD x (StreamStdDev prevC prevM prevS) = StreamStdDev {ssdCount = newC, ssdMean = newM, ssdS = newS}
     where newC = prevC + 1
           newM = prevM + (x-prevM)/(fromIntegral newC)
           newS = prevS + (x-prevM)*(x-newM)
 
+-- Takes upstream numerical values and passes the count, mean, and
+-- stddev of all values seen thus far down stream.
 ssdConduit :: (Fractional a, Monad m) => Conduit a m (StreamStdDev a)
 ssdConduit = do
   mFirst <- await
@@ -175,6 +214,8 @@ ssdConduit = do
         where updateSSDPair a s = (newSSD, (newSSD, a))
                 where newSSD = updateSSD a s
 
+-- State used internally by empiricalBernstienStoppingConduit between
+-- each step.
 data EBSState a = EBSState
     { ebsSSD :: StreamStdDev a
     , ebsCt :: a
@@ -185,7 +226,7 @@ data EBSState a = EBSState
     , ebsAlpha :: Rational
     } deriving (Show)
 
--- Helper function which turns a monadic value into a
+-- | A helper function which turns a monadic value into a
 -- Data.Conduit.Source of those values.
 monadicToSource :: (Monad m) => m a -> Source m a
 monadicToSource ma = CL.unfoldM (\_ -> ma >>= (\a -> return $ Just (a,()))) ()
