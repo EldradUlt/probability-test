@@ -16,8 +16,7 @@ module Test.TestApproximate
 
 import Test.QuickCheck (Arbitrary(..), Gen, generate, resize)
 import Data.Approximate (Approximate(..))
-import Data.Conduit (Source, ($$))
-import qualified Data.Conduit.List as CL
+import Data.Conduit (($$))
 import Numeric.Log.Signed (SignedLog)
 import Test.ProbabilityCheck.Internal (DistributionTestResult(..), DistributionTestValue(..), empiricalBernstienStopping, monadicToSource)
 
