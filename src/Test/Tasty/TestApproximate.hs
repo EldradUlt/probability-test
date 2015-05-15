@@ -5,6 +5,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 
+-- | This allows use of TestApproximate in tasty.
 module Test.Tasty.TestApproximate
        ( testApproximate
        , ApproxTest(..)

@@ -1,5 +1,7 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleInstances, FlexibleContexts, ScopedTypeVariables #-}
 
+-- | This contains the algorithm used internally by ProbabilityCheck
+-- and TestApproximate.
 module Test.ProbabilityCheck.Internal
        ( DistributionTestResult(..)
        , DistributionTestValue(..)
