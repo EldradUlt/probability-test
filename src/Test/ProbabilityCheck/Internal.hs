@@ -10,7 +10,7 @@ module Test.ProbabilityCheck.Internal
        , monadicToSource
        ) where
 
-import Data.Conduit (Sink, Conduit, await, yield, (=$), (=$=), awaitForever, addCleanup)
+import Data.Conduit (Sink, Conduit, Source, await, yield, (=$), (=$=), awaitForever, addCleanup)
 import qualified Data.Conduit.List as CL
 import Control.Monad.IO.Class (MonadIO(..))
 import Data.Ratio ((%))
