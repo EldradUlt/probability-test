@@ -7,6 +7,7 @@ module Test.ProbabilityCheck.Internal
        , initSSD, updateSSD, ssdConduit
        , EBSState(..)
        , empiricalBernstienStopping
+       , monadicToSource
        ) where
 
 import Data.Conduit (Sink, Conduit, await, yield, (=$), (=$=), awaitForever, addCleanup)
@@ -183,4 +184,10 @@ data EBSState a = EBSState
     , ebsDk :: a
     , ebsAlpha :: Rational
     } deriving (Show)
+
+-- Helper function which turns a monadic value into a
+-- Data.Conduit.Source of those values.
+monadicToSource :: (Monad m) => m a -> Source m a
+monadicToSource ma = CL.unfoldM (\_ -> ma >>= (\a -> return $ Just (a,()))) ()
+
 
