@@ -2,18 +2,25 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                probability-test
-version:             0.0.0.0
--- synopsis:            
--- description:         
+version:             0.0.0.1
+synopsis:            Automatic testing for Data.Approximate.
+description:         probability-test currently tests whether the
+  confidence of an Approximate is accurate. It will be expanded to
+  test a larger class of probabilistic assertions.
 license:             BSD3
 license-file:        LICENSE
-author:              eldrad
-maintainer:          alan@isomerica.net
--- copyright:           
+author:              Alan McAvinney <alan1@isomerica.net>
+maintainer:          alan1@isomerica.net
+copyright:           2015-2015 Alan McAvinney
 category:            Testing
 build-type:          Simple
 extra-source-files:  README
 cabal-version:       >=1.10
+homepage:            https://github.com/EldradUlt/probability-test
+
+source-repository head
+  type:     git
+  location: https://github.com/EldradUlt/probability-test
 
 Test-Suite probability-test-tests
   type:       exitcode-stdio-1.0
@@ -42,7 +49,7 @@ library
   exposed-modules:     Test.ProbabilityCheck.Internal Test.Tasty.TestApproximate Test.TestApproximate
   -- other-modules:       
   other-extensions:    MultiParamTypeClasses, FlexibleInstances
-  Ghc-Options: -Wall -threaded -rtsopts -auto-all -fprof-auto -caf-all
+  Ghc-Options: -Wall -rtsopts -auto-all -fprof-auto -caf-all
   build-depends:
       base >=4.6 && <4.8
     , QuickCheck >=2.7 && <2.8
