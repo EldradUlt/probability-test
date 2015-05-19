@@ -11,7 +11,7 @@ license:             BSD3
 license-file:        LICENSE
 author:              Alan McAvinney <alan1@isomerica.net>
 maintainer:          alan1@isomerica.net
-copyright:           2015-2015 Alan McAvinney
+copyright:           2014-2015 Alan McAvinney
 category:            Testing
 build-type:          Simple
 extra-source-files:  README
